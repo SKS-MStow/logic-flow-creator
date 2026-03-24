@@ -638,7 +638,23 @@ html, body {
     <span id="status-mode">Select</span>
     <span id="status-coords">0, 0</span>
     <span id="status-info"></span>
-    <span id="status-live" style="margin-left:auto; color:#888; font-size:11px;"></span>
+    <span id="status-flow" style="margin-left:auto; cursor:pointer; color:#0078d4; font-size:11px; padding:0 12px;" title="Click to switch flows"></span>
+    <span id="status-live" style="color:#888; font-size:11px;"></span>
+  </div>
+</div>
+
+<!-- Flow Picker Modal -->
+<div id="flow-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:450px;">
+    <h3>Flow Sessions</h3>
+    <div id="flow-list" style="max-height:300px; overflow-y:auto; margin:8px 0;"></div>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <input type="text" id="new-flow-name" placeholder="New flow name..." style="flex:1; background:#333; border:1px solid #555; color:#ccc; padding:6px 10px; border-radius:4px; font-size:13px;">
+      <button class="modal-btn primary" onclick="createNewFlow()">Create</button>
+    </div>
+    <div class="modal-buttons" style="margin-top:12px;">
+      <button class="modal-btn" onclick="closeFlowModal()">Close</button>
+    </div>
   </div>
 </div>
 
@@ -875,6 +891,103 @@ function dispatch(action, payload) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// FLOW SESSION MANAGEMENT — named flows stored in logic-flows/
+// ═══════════════════════════════════════════════════════════════
+
+let currentFlowName = 'untitled';
+
+function getFlowFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('flow') || 'untitled';
+}
+
+function setFlowInUrl(name) {
+  const url = new URL(window.location);
+  url.searchParams.set('flow', name);
+  window.history.replaceState({}, '', url);
+}
+
+function updateFlowIndicator() {
+  const el = document.getElementById('status-flow');
+  if (el) el.textContent = currentFlowName;
+  document.title = `${currentFlowName} — Logic Flow Editor`;
+}
+
+async function switchFlow(name) {
+  currentFlowName = name;
+  setFlowInUrl(name);
+  updateFlowIndicator();
+  // Try to load the flow
+  try {
+    const resp = await fetch(`/flows/${encodeURIComponent(name)}.json?t=${Date.now()}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.nodes) {
+        dispatch('IMPORT_STATE', data);
+        setTimeout(fitAll, 50);
+        return;
+      }
+    }
+  } catch (e) {}
+  // New empty flow
+  dispatch('CLEAR_ALL');
+}
+
+async function loadFlowList() {
+  const listEl = document.getElementById('flow-list');
+  if (!listEl) return;
+  try {
+    const resp = await fetch('/flows?t=' + Date.now());
+    if (!resp.ok) { listEl.innerHTML = '<div style="color:#888;padding:8px;">No flows yet</div>'; return; }
+    const flows = await resp.json();
+    if (!flows.length) { listEl.innerHTML = '<div style="color:#888;padding:8px;">No flows yet — create one below</div>'; return; }
+    listEl.innerHTML = flows.map(f => `
+      <div style="display:flex;align-items:center;padding:6px 8px;border-bottom:1px solid #333;${f.name === currentFlowName ? 'background:#0078d433;' : ''}" class="flow-item">
+        <span style="flex:1;cursor:pointer;color:${f.name === currentFlowName ? '#4ec970' : '#ccc'}" onclick="switchFlow('${f.name}');closeFlowModal();">${f.name}</span>
+        <span style="color:#888;font-size:11px;margin-right:12px;">${f.nodes}n / ${f.connections}c</span>
+        <span style="color:#666;font-size:11px;margin-right:12px;">${new Date(f.modified * 1000).toLocaleDateString()}</span>
+        ${f.name !== currentFlowName ? `<button style="background:none;border:none;color:#d64545;cursor:pointer;font-size:13px;" onclick="deleteFlow('${f.name}')" title="Delete">&#x2715;</button>` : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = '<div style="color:#888;padding:8px;">Server not running</div>';
+  }
+}
+
+function openFlowModal() {
+  document.getElementById('flow-modal').classList.remove('hidden');
+  loadFlowList();
+}
+function closeFlowModal() {
+  document.getElementById('flow-modal').classList.add('hidden');
+}
+window.openFlowModal = openFlowModal;
+window.closeFlowModal = closeFlowModal;
+window.switchFlow = switchFlow;
+
+function createNewFlow() {
+  const input = document.getElementById('new-flow-name');
+  const name = input.value.trim().replace(/[^\w\-\s]/g, '').replace(/\s+/g, '-').toLowerCase();
+  if (!name) return;
+  input.value = '';
+  switchFlow(name);
+  closeFlowModal();
+  // Auto-save empty state so the file exists
+  scheduleAutoSave();
+}
+window.createNewFlow = createNewFlow;
+
+async function deleteFlow(name) {
+  if (!confirm(`Delete flow "${name}"?`)) return;
+  try { await fetch(`/delete?flow=${encodeURIComponent(name)}`, { method: 'POST' }); } catch (e) {}
+  loadFlowList();
+}
+window.deleteFlow = deleteFlow;
+
+// Click flow name in status bar to open picker
+document.getElementById('status-flow')?.addEventListener('click', openFlowModal);
+
+// ═══════════════════════════════════════════════════════════════
 // AUTO-SAVE — debounced POST to server, keeps file in sync
 // ═══════════════════════════════════════════════════════════════
 
@@ -905,7 +1018,7 @@ async function autoSave() {
   if (hash === lastSaveHash) return;
 
   try {
-    const resp = await fetch('/save', {
+    const resp = await fetch(`/save?flow=${encodeURIComponent(currentFlowName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: json
@@ -2809,7 +2922,7 @@ let liveReloadEnabled = true;
 async function checkForDataFile() {
   const statusEl = document.getElementById('status-live');
   try {
-    const resp = await fetch('logic-flow-data.json?t=' + Date.now());
+    const resp = await fetch(`/flows/${encodeURIComponent(currentFlowName)}.json?t=${Date.now()}`);
     if (!resp.ok) {
       if (statusEl) statusEl.textContent = '';
       return false;
@@ -2880,13 +2993,18 @@ function stopLiveReload() {
 // ═══════════════════════════════════════════════════════════════
 
 async function init() {
+  // Read flow name from URL param
+  currentFlowName = getFlowFromUrl();
+  setFlowInUrl(currentFlowName);
+  updateFlowIndicator();
+
   // Center viewport
   const rect = svgEl.getBoundingClientRect();
   store.viewport.x = rect.width / 2;
   store.viewport.y = rect.height / 2;
   render();
 
-  // Try loading live data file first, fall back to demo
+  // Try loading the named flow, fall back to demo
   const loaded = await checkForDataFile();
   if (!loaded) loadDemo();
 

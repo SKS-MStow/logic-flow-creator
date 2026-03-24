@@ -49,11 +49,40 @@ Run this with `run_in_background: true` so it doesn't block. The server auto-ope
 
 If the server is already running, skip straight to generating the diagram.
 
-## After Writing the JSON
+## Flow Sessions
+
+Each diagram is a named "flow" stored in `C:/Users/localadmin/logic-flows/<name>.json`. This means multiple diagrams can coexist without overwriting each other.
+
+### Creating a new flow
+
+When the user asks for a new diagram, pick a short descriptive kebab-case name (e.g., `afp-touchpanel`, `auth-flow`, `order-processing`). Write the JSON to:
+
+```
+C:/Users/localadmin/logic-flows/<name>.json
+```
+
+Then tell the user to open (or it will auto-open):
+```
+http://localhost:8000/logic-flow-editor.html?flow=<name>
+```
+
+### Iterating on an existing flow
+
+When the user asks to modify a diagram, read the flow file first:
+```
+C:/Users/localadmin/logic-flows/<name>.json
+```
+This will include any edits the user made in the browser (they auto-save). Modify and write it back.
+
+### Opening an existing flow
+
+If the user wants to come back to a previous flow, they can click the flow name in the status bar to see all saved flows — or just navigate to `?flow=<name>`.
+
+### After Writing the JSON
 
 Tell the user:
-- If the editor is already open: "Diagram updated — it'll auto-load in a moment."
-- First time: "Server started and editor opened at http://localhost:8000/logic-flow-editor.html — diagram is loading now."
+- If the editor is already open on that flow: "Diagram updated — it'll auto-load in a moment."
+- First time / new flow: "Flow created. Open http://localhost:8000/logic-flow-editor.html?flow=<name>"
 - If iterating: "I've read your changes and updated the diagram — check the editor."
 
 ## JSON Schema
@@ -113,10 +142,26 @@ Each node has 4 connection ports: `top`, `bottom`, `left`, `right`.
 
 ## Layout Rules
 
+### NO OVERLAPPING NODES — Critical Rule
+
+Nodes and branches must NEVER overlap. This is the most important layout rule. Connection lines can cross, but node rectangles must never sit on top of each other.
+
+Before finalizing the JSON, mentally check every node's bounding box (`x` to `x+width`, `y` to `y+height`) against every other node. If any two overlap, adjust positions. Common mistakes:
+- A side branch column sits underneath the main flow column because the x-offset wasn't enough
+- Decision "No" branches overlap with the next node in the main "Yes" path below
+- Multiple fan-out branches at the same y-level are too close together — each branch column needs its own clear x-lane
+
+**How to prevent overlaps with branches:**
+1. First, lay out the main vertical flow down the center
+2. For each branch point, calculate how wide the branch column will be (widest node + padding)
+3. Space branch columns so that `column_x + max_node_width + 40px < next_column_x`
+4. If a branch is tall (many nodes), make sure it doesn't extend into the y-range of the next section of the main flow
+
 ### Spacing
 - **Vertical spacing**: 130-150px between node rows
-- **Horizontal spacing**: 220-250px between nodes on the same row (branches)
+- **Horizontal spacing**: 220-250px between branch columns (measured from left edge to left edge)
 - **Center the main flow** around x=300
+- **Minimum gap**: Always keep at least 40px between the right edge of one node and the left edge of another
 
 ### Node Sizing
 - **Start/End**: `width: 140, height: 50-60`
@@ -136,11 +181,12 @@ Each node has 4 connection ports: `top`, `bottom`, `left`, `right`.
 
 ## Complex Diagrams
 
-For larger flows with multiple branches (like the AFP touchpanel example):
+For larger flows with multiple branches:
 - Keep the main startup/happy path as a straight vertical line down the center
-- Fan out branches horizontally at the same y-level, spaced 220-250px apart
-- Each branch column flows straight down independently
-- Use consistent color coding across branches to show categories (user action, control, feedback, UI)
+- Fan out branches horizontally at the same y-level
+- **Each branch gets its own x-lane** — calculate lane widths based on the widest node in each branch, plus 40px padding on each side
+- Each branch column flows straight down independently within its lane
+- Use consistent color coding across branches to show categories
 - Group related nodes by column — one column per interaction type
 - Use comment nodes sparingly for annotations
 
@@ -148,6 +194,6 @@ For larger flows with multiple branches (like the AFP touchpanel example):
 
 - Don't output JSON in the chat — write it to the file with the Write tool
 - Don't use node IDs that could collide
-- Don't make nodes overlap — check x/y coordinates and sizes
+- Don't let nodes overlap — this is the #1 layout failure; always verify bounding boxes
 - Don't forget connections — every node except comments should have at least one
-- Don't put all branch nodes at the same x coordinate — spread them out horizontally
+- Don't put branch columns too close together — account for the full width of every node in each column
