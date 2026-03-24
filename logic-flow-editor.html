@@ -1,0 +1,3377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logic Flow Editor</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CSS — VS Code Dark Theme
+   ═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #1e1e1e;
+  --bg2: #252526;
+  --bg3: #2d2d30;
+  --bg4: #333337;
+  --accent: #0078d4;
+  --accent-hover: #1a8ae8;
+  --text: #cccccc;
+  --text-bright: #e0e0e0;
+  --text-dim: #888888;
+  --border: #3c3c3c;
+  --danger: #d64545;
+  --success: #2d7d46;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --port-radius: 6px;
+  --handle-size: 8px;
+  --toolbar-height: 42px;
+  --panel-width: 280px;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── App Layout ── */
+#app {
+  display: flex;
+  flex-direction: column;
+  width: 100%; height: 100%;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+  display: flex;
+  align-items: center;
+  height: var(--toolbar-height);
+  min-height: var(--toolbar-height);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 8px;
+  gap: 2px;
+  z-index: 100;
+  overflow-x: auto;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 6px;
+}
+
+.tb-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  position: relative;
+}
+.tb-btn:hover { background: var(--bg4); }
+.tb-btn.active { background: var(--accent); color: #fff; }
+.tb-btn svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; }
+.tb-btn[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  color: var(--text-bright);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 200;
+  pointer-events: none;
+  border: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.tb-btn-wide {
+  width: auto;
+  padding: 0 8px;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.zoom-display {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 42px;
+  text-align: center;
+  padding: 0 4px;
+}
+
+/* ── Main Area ── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Canvas Container ── */
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  cursor: default;
+}
+
+#canvas-container.mode-select { cursor: default; }
+#canvas-container.mode-connect { cursor: crosshair; }
+#canvas-container.mode-place { cursor: copy; }
+#canvas-container.mode-pan { cursor: grab; }
+#canvas-container.mode-panning { cursor: grabbing; }
+
+#canvas-svg {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+/* ── Properties Panel ── */
+#properties-panel {
+  width: var(--panel-width);
+  min-width: var(--panel-width);
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: margin-right 0.2s;
+}
+
+#properties-panel.collapsed {
+  margin-right: calc(-1 * var(--panel-width));
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.panel-header button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.panel-header button:hover { color: var(--text); }
+
+.panel-section {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-section h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+
+.prop-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 6px;
+}
+
+.prop-row label {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 32px;
+  flex-shrink: 0;
+}
+
+.prop-row input[type="text"],
+.prop-row input[type="number"],
+.prop-row textarea,
+.prop-row select {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: var(--font);
+  outline: none;
+}
+.prop-row input:focus, .prop-row textarea:focus, .prop-row select:focus {
+  border-color: var(--accent);
+}
+
+.prop-row input[type="color"] {
+  width: 28px; height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.prop-row textarea { resize: vertical; min-height: 50px; }
+
+.prop-row-pair {
+  display: flex;
+  gap: 6px;
+}
+.prop-row-pair .prop-row { flex: 1; margin-bottom: 0; }
+
+.align-buttons {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.align-btn {
+  width: 30px; height: 28px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.align-btn:hover { background: var(--bg4); border-color: var(--accent); }
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.info-row .label { color: var(--text-dim); }
+.info-row .value { color: var(--text-bright); }
+
+/* ── Panel Collapse Toggle ── */
+#panel-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px; height: 40px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  z-index: 50;
+  font-size: 10px;
+}
+#panel-toggle:hover { color: var(--text); background: var(--bg4); }
+
+/* ── Context Menu ── */
+#context-menu {
+  position: fixed;
+  display: none;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 180px;
+  z-index: 1000;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+#context-menu.visible { display: block; }
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+.ctx-item:hover { background: var(--accent); color: #fff; }
+.ctx-item .shortcut { color: var(--text-dim); font-size: 11px; margin-left: 20px; }
+.ctx-item:hover .shortcut { color: rgba(255,255,255,0.7); }
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+.ctx-item.danger { color: var(--danger); }
+.ctx-item.danger:hover { background: var(--danger); color: #fff; }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-overlay.hidden { display: none; }
+
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 500px;
+  max-width: 700px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.modal h3 { margin-bottom: 12px; color: var(--text-bright); font-size: 16px; }
+.modal textarea {
+  width: 100%;
+  min-height: 300px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 10px;
+  resize: vertical;
+  outline: none;
+}
+.modal textarea:focus { border-color: var(--accent); }
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.modal-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg3);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+.modal-btn:hover { background: var(--bg4); }
+.modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal-btn.primary:hover { background: var(--accent-hover); }
+
+/* ── Inline Text Editor ── */
+#inline-editor {
+  position: absolute;
+  display: none;
+  z-index: 500;
+}
+#inline-editor textarea {
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text-bright);
+  font-family: var(--font);
+  padding: 4px 6px;
+  resize: none;
+  outline: none;
+  text-align: center;
+  overflow: hidden;
+}
+
+/* ── Minimap ── */
+#minimap {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 200px;
+  height: 150px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+#minimap canvas { width: 100%; height: 100%; display: block; }
+
+/* ── Selection Marquee ── */
+.selection-marquee {
+  fill: rgba(0, 120, 212, 0.1);
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 2;
+}
+
+/* ── SVG Node Styles ── */
+.node-shape { stroke-width: 2; cursor: move; }
+.node-shape:hover { filter: brightness(1.15); }
+.node-text { fill: #ffffff; font-family: system-ui, sans-serif; pointer-events: none; }
+.node-port {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 1.5;
+  cursor: crosshair;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.node-group:hover .node-port,
+.node-group.selected .node-port { opacity: 1; }
+
+.resize-handle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  cursor: nwse-resize;
+}
+.resize-handle.h-top, .resize-handle.h-bottom { cursor: ns-resize; }
+.resize-handle.h-left, .resize-handle.h-right { cursor: ew-resize; }
+.resize-handle.h-top-left, .resize-handle.h-bottom-right { cursor: nwse-resize; }
+.resize-handle.h-top-right, .resize-handle.h-bottom-left { cursor: nesw-resize; }
+
+.connection-line { fill: none; stroke-width: 2; cursor: pointer; }
+.connection-line:hover { stroke-width: 3; }
+.connection-hit { fill: none; stroke: transparent; stroke-width: 12; cursor: pointer; }
+.connection-label {
+  fill: var(--text);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.drag-preview-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+/* ── Status Bar ── */
+#status-bar {
+  height: 22px;
+  min-height: 22px;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  gap: 16px;
+  z-index: 100;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ═══ Toolbar ═══ -->
+  <div id="toolbar">
+    <!-- Add Nodes -->
+    <div class="toolbar-group">
+      <button class="tb-btn tb-btn-wide" data-action="add-process" data-tooltip="Process Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="2" y="4" width="14" height="10" rx="2" fill="none"/></svg>
+        <span>Process</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="add-decision" data-tooltip="Decision Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><polygon points="9,1 17,9 9,17 1,9" fill="none"/></svg>
+        <span>Decision</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="add-startend" data-tooltip="Start/End Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="1" y="4" width="16" height="10" rx="5" fill="none"/></svg>
+        <span>Start/End</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="add-io" data-tooltip="I/O Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><polygon points="4,14 1,4 14,4 17,14" fill="none"/></svg>
+        <span>I/O</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="add-comment" data-tooltip="Comment Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="2" y="4" width="14" height="10" rx="1" stroke-dasharray="3 2" fill="none"/></svg>
+        <span>Comment</span>
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <!-- Tools -->
+    <div class="toolbar-group">
+      <button class="tb-btn active" data-action="tool-select" data-tooltip="Select (V)">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><path d="M4 2l10 7-5 1-2 5z" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="tb-btn" data-action="tool-connect" data-tooltip="Connect (C)">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="2"><circle cx="4" cy="4" r="2.5"/><circle cx="14" cy="14" r="2.5"/><path d="M6 5.5L12 12.5"/></svg>
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <!-- Actions -->
+    <div class="toolbar-group">
+      <button class="tb-btn" data-action="undo" data-tooltip="Undo (Ctrl+Z)">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="2"><path d="M5 8L2 5l3-3"/><path d="M2 5h9a5 5 0 010 10H7"/></svg>
+      </button>
+      <button class="tb-btn" data-action="redo" data-tooltip="Redo (Ctrl+Y)">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="2"><path d="M13 8l3-3-3-3"/><path d="M16 5H7a5 5 0 000 10h4"/></svg>
+      </button>
+      <button class="tb-btn" data-action="delete" data-tooltip="Delete (Del)">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><path d="M3 5h12"/><path d="M6 5V3h6v2"/><path d="M5 5l1 10h6l1-10"/></svg>
+      </button>
+      <button class="tb-btn" data-action="auto-layout" data-tooltip="Auto Layout">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="6" y="1" width="6" height="4" rx="1"/><rect x="1" y="13" width="6" height="4" rx="1"/><rect x="11" y="13" width="6" height="4" rx="1"/><path d="M9 5v3M9 8L4 13M9 8l5 5"/></svg>
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <!-- View -->
+    <div class="toolbar-group">
+      <button class="tb-btn" data-action="zoom-in" data-tooltip="Zoom In">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><circle cx="8" cy="8" r="5"/><path d="M12 12l4 4"/><path d="M6 8h4M8 6v4"/></svg>
+      </button>
+      <span class="zoom-display" id="zoom-display">100%</span>
+      <button class="tb-btn" data-action="zoom-out" data-tooltip="Zoom Out">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><circle cx="8" cy="8" r="5"/><path d="M12 12l4 4"/><path d="M6 8h4"/></svg>
+      </button>
+      <button class="tb-btn" data-action="fit-all" data-tooltip="Fit All">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="1" y="1" width="16" height="16" rx="2"/><path d="M5 1v16M13 1v16M1 5h16M1 13h16"/></svg>
+      </button>
+      <button class="tb-btn" data-action="toggle-grid" data-tooltip="Toggle Grid (G)">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1"><path d="M0 6h18M0 12h18M6 0v18M12 0v18" stroke-opacity="0.5"/></svg>
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <!-- File -->
+    <div class="toolbar-group">
+      <button class="tb-btn tb-btn-wide" data-action="import-json" data-tooltip="Import JSON">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><path d="M9 12V2M9 2L6 5M9 2l3 3"/><path d="M2 10v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>
+        <span>Import</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="export-json" data-tooltip="Export JSON">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><path d="M9 2v10M9 12l-3-3M9 12l3-3"/><path d="M2 10v5a1 1 0 001 1h12a1 1 0 001-1v-5"/></svg>
+        <span>Export</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="export-png" data-tooltip="Export PNG">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="2" y="2" width="14" height="14" rx="2"/><circle cx="7" cy="7" r="2"/><path d="M2 13l4-4 3 3 2-2 5 5H3z" fill="currentColor" opacity="0.3"/></svg>
+        <span>PNG</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="load-json" data-tooltip="Paste JSON">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="4" y="1" width="10" height="16" rx="1"/><path d="M7 1V0h4v1"/><path d="M7 8h4M7 11h4M7 5h4"/></svg>
+        <span>Load JSON</span>
+      </button>
+      <button class="tb-btn" data-action="clear-all" data-tooltip="Clear All">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><path d="M4 4l10 10M14 4L4 14"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ Main Area ═══ -->
+  <div id="main">
+    <!-- Canvas -->
+    <div id="canvas-container" class="mode-select">
+      <svg id="canvas-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid-pattern" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#333333" stroke-width="0.5" opacity="0.4"/>
+          </pattern>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#569cd6"/>
+          </marker>
+          <marker id="arrowhead-selected" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#0078d4"/>
+          </marker>
+        </defs>
+        <g id="viewport">
+          <rect id="grid-rect" width="10000" height="10000" x="-5000" y="-5000" fill="url(#grid-pattern)"/>
+          <g id="layer-connections"></g>
+          <g id="layer-nodes"></g>
+          <g id="layer-selection"></g>
+          <g id="layer-drag-preview"></g>
+        </g>
+      </svg>
+      <div id="inline-editor"><textarea></textarea></div>
+      <div id="panel-toggle" title="Toggle Properties Panel">&#9654;</div>
+      <div id="minimap"><canvas id="minimap-canvas" width="400" height="300"></canvas></div>
+    </div>
+
+    <!-- Properties Panel -->
+    <div id="properties-panel">
+      <div class="panel-header">
+        <span>Properties</span>
+      </div>
+      <div id="panel-content"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Status Bar ═══ -->
+  <div id="status-bar">
+    <span id="status-mode">Select</span>
+    <span id="status-coords">0, 0</span>
+    <span id="status-info"></span>
+    <span id="status-live" style="margin-left:auto; color:#888; font-size:11px;"></span>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu"></div>
+
+<!-- JSON Import Modal -->
+<div id="json-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Load JSON</h3>
+    <textarea id="json-textarea" placeholder="Paste your JSON diagram here..."></textarea>
+    <div class="modal-buttons">
+      <button class="modal-btn" onclick="closeJsonModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="loadJsonFromModal()">Load</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept=".json" style="display:none">
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   LOGIC FLOW EDITOR — Complete Implementation
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── Utility helpers ──
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+const uid = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const cuid = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const snapTo = (v, grid) => Math.round(v / grid) * grid;
+const lerp = (a, b, t) => a + (b - a) * t;
+
+// Hidden canvas for text measurement
+const measureCanvas = document.createElement('canvas');
+const measureCtx = measureCanvas.getContext('2d');
+
+function measureTextWidth(text, fontSize, fontFamily) {
+  measureCtx.font = `${fontSize}px ${fontFamily || 'system-ui, sans-serif'}`;
+  return measureCtx.measureText(text).width;
+}
+
+function wrapText(text, maxWidth, fontSize) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (measureTextWidth(test, fontSize) > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STORE — Central State Management
+// ═══════════════════════════════════════════════════════════════
+
+const NODE_DEFAULTS = {
+  process:  { width: 160, height: 80,  color: '#264f78', textColor: '#ffffff', fontSize: 14 },
+  decision: { width: 160, height: 120, color: '#6a4c93', textColor: '#ffffff', fontSize: 14 },
+  startend: { width: 160, height: 70,  color: '#2d7d46', textColor: '#ffffff', fontSize: 14 },
+  io:       { width: 160, height: 80,  color: '#8a5d3b', textColor: '#ffffff', fontSize: 14 },
+  comment:  { width: 180, height: 80,  color: '#4a4a2a', textColor: '#cccccc', fontSize: 13 },
+};
+
+const store = {
+  nodes: {},
+  connections: {},
+  selectedIds: [],
+  viewport: { x: 0, y: 0, zoom: 1 },
+  mode: 'select',       // select, connect, place
+  placeType: null,
+  gridSnap: true,
+  gridSize: 20,
+  gridVisible: true,
+  clipboard: null,
+  undoStack: [],
+  redoStack: [],
+  maxUndo: 50,
+};
+
+function getState() {
+  return {
+    nodes: JSON.parse(JSON.stringify(store.nodes)),
+    connections: JSON.parse(JSON.stringify(store.connections)),
+  };
+}
+
+function pushUndo() {
+  store.undoStack.push(getState());
+  if (store.undoStack.length > store.maxUndo) store.undoStack.shift();
+  store.redoStack = [];
+}
+
+function dispatch(action, payload) {
+  switch (action) {
+    case 'ADD_NODE': {
+      pushUndo();
+      store.nodes[payload.id] = { ...payload };
+      break;
+    }
+    case 'DELETE_NODES': {
+      pushUndo();
+      const ids = new Set(payload);
+      for (const id of ids) delete store.nodes[id];
+      // delete connected connections
+      for (const [cid, conn] of Object.entries(store.connections)) {
+        if (ids.has(conn.from) || ids.has(conn.to)) delete store.connections[cid];
+      }
+      store.selectedIds = store.selectedIds.filter(id => !ids.has(id));
+      break;
+    }
+    case 'MOVE_NODES': {
+      // payload: { moves: [{id, x, y}] }
+      for (const m of payload.moves) {
+        if (store.nodes[m.id]) {
+          store.nodes[m.id].x = m.x;
+          store.nodes[m.id].y = m.y;
+        }
+      }
+      break;
+    }
+    case 'MOVE_NODES_FINAL': {
+      pushUndo();
+      for (const m of payload.moves) {
+        if (store.nodes[m.id]) {
+          store.nodes[m.id].x = m.x;
+          store.nodes[m.id].y = m.y;
+        }
+      }
+      break;
+    }
+    case 'RESIZE_NODE': {
+      pushUndo();
+      const n = store.nodes[payload.id];
+      if (n) Object.assign(n, payload.props);
+      break;
+    }
+    case 'UPDATE_NODE_PROPS': {
+      pushUndo();
+      const n2 = store.nodes[payload.id];
+      if (n2) Object.assign(n2, payload.props);
+      break;
+    }
+    case 'ADD_CONNECTION': {
+      pushUndo();
+      store.connections[payload.id] = { ...payload };
+      break;
+    }
+    case 'DELETE_CONNECTIONS': {
+      pushUndo();
+      for (const id of payload) delete store.connections[id];
+      store.selectedIds = store.selectedIds.filter(id => !payload.includes(id));
+      break;
+    }
+    case 'UPDATE_CONNECTION_PROPS': {
+      pushUndo();
+      const c = store.connections[payload.id];
+      if (c) Object.assign(c, payload.props);
+      break;
+    }
+    case 'SET_SELECTION': {
+      store.selectedIds = [...payload];
+      break;
+    }
+    case 'SET_VIEWPORT': {
+      Object.assign(store.viewport, payload);
+      break;
+    }
+    case 'SET_MODE': {
+      store.mode = payload.mode;
+      store.placeType = payload.placeType || null;
+      break;
+    }
+    case 'TOGGLE_GRID': {
+      if (payload === 'snap') store.gridSnap = !store.gridSnap;
+      else if (payload === 'visible') store.gridVisible = !store.gridVisible;
+      break;
+    }
+    case 'IMPORT_STATE': {
+      pushUndo();
+      store.nodes = {};
+      store.connections = {};
+      if (payload.nodes) {
+        for (const n of payload.nodes) store.nodes[n.id] = { ...n };
+      }
+      if (payload.connections) {
+        for (const c of payload.connections) store.connections[c.id] = { ...c };
+      }
+      store.selectedIds = [];
+      break;
+    }
+    case 'CLEAR_ALL': {
+      pushUndo();
+      store.nodes = {};
+      store.connections = {};
+      store.selectedIds = [];
+      break;
+    }
+    case 'UNDO': {
+      if (store.undoStack.length === 0) return;
+      store.redoStack.push(getState());
+      const prev = store.undoStack.pop();
+      store.nodes = prev.nodes;
+      store.connections = prev.connections;
+      store.selectedIds = store.selectedIds.filter(id => store.nodes[id] || store.connections[id]);
+      break;
+    }
+    case 'REDO': {
+      if (store.redoStack.length === 0) return;
+      store.undoStack.push(getState());
+      const next = store.redoStack.pop();
+      store.nodes = next.nodes;
+      store.connections = next.connections;
+      store.selectedIds = store.selectedIds.filter(id => store.nodes[id] || store.connections[id]);
+      break;
+    }
+  }
+  render();
+
+  // Auto-save to server on data-changing actions (not viewport/selection/mode changes)
+  const noSaveActions = new Set(['SET_SELECTION', 'SET_VIEWPORT', 'SET_MODE', 'TOGGLE_GRID', 'MOVE_NODES']);
+  if (!noSaveActions.has(action)) {
+    scheduleAutoSave();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-SAVE — debounced POST to server, keeps file in sync
+// ═══════════════════════════════════════════════════════════════
+
+let autoSaveTimer = null;
+let lastSaveHash = null;
+
+function scheduleAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(autoSave, 500);
+}
+
+async function autoSave() {
+  const data = {
+    version: 1,
+    nodes: Object.values(store.nodes).map(n => ({
+      id: n.id, type: n.type, x: n.x, y: n.y, width: n.width, height: n.height,
+      text: n.text, color: n.color, textColor: n.textColor, fontSize: n.fontSize
+    })),
+    connections: Object.values(store.connections).map(c => ({
+      id: c.id, from: c.from, fromPort: c.fromPort, to: c.to, toPort: c.toPort,
+      label: c.label, color: c.color, lineStyle: c.lineStyle
+    }))
+  };
+  const json = JSON.stringify(data, null, 2);
+  const hash = simpleHash(json);
+
+  // Skip if nothing changed
+  if (hash === lastSaveHash) return;
+
+  try {
+    const resp = await fetch('/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: json
+    });
+    if (resp.ok) {
+      lastSaveHash = hash;
+      // Update live-reload hash so we don't re-import our own save
+      liveReloadHash = hash;
+      const statusEl = document.getElementById('status-live');
+      if (statusEl) {
+        statusEl.textContent = 'Saved';
+        statusEl.style.color = '#4ec970';
+        setTimeout(() => {
+          statusEl.textContent = 'Watching...';
+          statusEl.style.color = '#888';
+        }, 1500);
+      }
+    }
+  } catch (e) {
+    // Server not running — silently ignore, editor still works standalone
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COORDINATE TRANSFORMS
+// ═══════════════════════════════════════════════════════════════
+
+const svgEl = $('#canvas-svg');
+const viewportEl = $('#viewport');
+const container = $('#canvas-container');
+
+function screenToCanvas(sx, sy) {
+  const rect = svgEl.getBoundingClientRect();
+  const x = (sx - rect.left - store.viewport.x) / store.viewport.zoom;
+  const y = (sy - rect.top - store.viewport.y) / store.viewport.zoom;
+  return { x, y };
+}
+
+function canvasToScreen(cx, cy) {
+  const rect = svgEl.getBoundingClientRect();
+  const x = cx * store.viewport.zoom + store.viewport.x + rect.left;
+  const y = cy * store.viewport.zoom + store.viewport.y + rect.top;
+  return { x, y };
+}
+
+function updateViewportTransform() {
+  const { x, y, zoom } = store.viewport;
+  viewportEl.setAttribute('transform', `translate(${x},${y}) scale(${zoom})`);
+  $('#grid-pattern').setAttribute('patternTransform', `translate(${x},${y}) scale(${zoom})`);
+  $('#zoom-display').textContent = Math.round(zoom * 100) + '%';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PORT POSITIONS
+// ═══════════════════════════════════════════════════════════════
+
+function getPortPos(node, port) {
+  const { x, y, width: w, height: h } = node;
+  switch (port) {
+    case 'top':    return { x: x + w / 2, y: y };
+    case 'bottom': return { x: x + w / 2, y: y + h };
+    case 'left':   return { x: x, y: y + h / 2 };
+    case 'right':  return { x: x + w, y: y + h / 2 };
+  }
+  return { x: x + w / 2, y: y + h / 2 };
+}
+
+function nearestPort(node, px, py) {
+  let best = null, bestDist = Infinity;
+  for (const port of ['top', 'bottom', 'left', 'right']) {
+    const p = getPortPos(node, port);
+    const d = (p.x - px) ** 2 + (p.y - py) ** 2;
+    if (d < bestDist) { bestDist = d; best = port; }
+  }
+  return best;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONNECTION ROUTING
+// ═══════════════════════════════════════════════════════════════
+
+function routeConnection(fromNode, fromPort, toNode, toPort) {
+  const p1 = getPortPos(fromNode, fromPort);
+  const p2 = getPortPos(toNode, toPort);
+  return routeConnectionPoints(p1, fromPort, p2, toPort);
+}
+
+function routeConnectionPoints(p1, fromPort, p2, toPort) {
+  const offset = 30;
+  const isVertFrom = fromPort === 'top' || fromPort === 'bottom';
+  const isVertTo = toPort === 'top' || toPort === 'bottom';
+  const dirFrom = fromPort === 'bottom' || fromPort === 'right' ? 1 : -1;
+  const dirTo = toPort === 'bottom' || toPort === 'right' ? 1 : -1;
+
+  let points = [];
+
+  if (isVertFrom && isVertTo) {
+    // both vertical: go out vertically, then horizontal, then vertical
+    const midY = (p1.y + dirFrom * offset + p2.y + dirTo * offset) / 2;
+    const exitY = p1.y + dirFrom * offset;
+    const enterY = p2.y + dirTo * offset;
+    const useY = (dirFrom === 1 && p2.y > p1.y + 2 * offset) || (dirFrom === -1 && p2.y < p1.y - 2 * offset)
+      ? (exitY + enterY) / 2 : exitY;
+    points = [
+      p1,
+      { x: p1.x, y: useY },
+      { x: p2.x, y: useY },
+      p2
+    ];
+  } else if (!isVertFrom && !isVertTo) {
+    // both horizontal
+    const exitX = p1.x + dirFrom * offset;
+    const enterX = p2.x + dirTo * offset;
+    const useX = (exitX + enterX) / 2;
+    points = [
+      p1,
+      { x: useX, y: p1.y },
+      { x: useX, y: p2.y },
+      p2
+    ];
+  } else if (isVertFrom && !isVertTo) {
+    // vertical out, horizontal in: L-shape
+    points = [
+      p1,
+      { x: p1.x, y: p2.y },
+      p2
+    ];
+  } else {
+    // horizontal out, vertical in: L-shape
+    points = [
+      p1,
+      { x: p2.x, y: p1.y },
+      p2
+    ];
+  }
+
+  return points;
+}
+
+function pointsToPath(points) {
+  if (points.length < 2) return '';
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    d += ` L ${points[i].x} ${points[i].y}`;
+  }
+  return d;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SVG RENDERING
+// ═══════════════════════════════════════════════════════════════
+
+const layerNodes = $('#layer-nodes');
+const layerConnections = $('#layer-connections');
+const layerSelection = $('#layer-selection');
+const layerDragPreview = $('#layer-drag-preview');
+
+function createSVGElement(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    el.setAttribute(k, v);
+  }
+  return el;
+}
+
+function renderNodeShape(g, node) {
+  const { type, x, y, width: w, height: h, color } = node;
+  let shape;
+  switch (type) {
+    case 'process':
+      shape = createSVGElement('rect', {
+        x, y, width: w, height: h, rx: 6, ry: 6,
+        fill: color, stroke: '#ffffff22', 'stroke-width': 2
+      });
+      break;
+    case 'decision': {
+      const cx = x + w / 2, cy = y + h / 2;
+      const pts = `${cx},${y} ${x + w},${cy} ${cx},${y + h} ${x},${cy}`;
+      shape = createSVGElement('polygon', {
+        points: pts, fill: color, stroke: '#ffffff22', 'stroke-width': 2
+      });
+      break;
+    }
+    case 'startend':
+      shape = createSVGElement('rect', {
+        x, y, width: w, height: h, rx: h / 2, ry: h / 2,
+        fill: color, stroke: '#ffffff22', 'stroke-width': 2
+      });
+      break;
+    case 'io': {
+      const skew = w * 0.15;
+      const pts = `${x + skew},${y} ${x + w},${y} ${x + w - skew},${y + h} ${x},${y + h}`;
+      shape = createSVGElement('polygon', {
+        points: pts, fill: color, stroke: '#ffffff22', 'stroke-width': 2
+      });
+      break;
+    }
+    case 'comment':
+      shape = createSVGElement('rect', {
+        x, y, width: w, height: h, rx: 4, ry: 4,
+        fill: color, 'fill-opacity': 0.7, stroke: '#888888', 'stroke-width': 1.5,
+        'stroke-dasharray': '6 3'
+      });
+      break;
+  }
+  shape.classList.add('node-shape');
+  shape.dataset.nodeId = node.id;
+  g.appendChild(shape);
+}
+
+function renderNodeText(g, node) {
+  const { x, y, width: w, height: h, text, textColor, fontSize } = node;
+  const padding = node.type === 'io' ? w * 0.18 : 12;
+  const maxW = w - padding * 2;
+  const lines = wrapText(text || '', maxW, fontSize);
+  const lineHeight = fontSize * 1.3;
+  const totalH = lines.length * lineHeight;
+  const startY = y + (h - totalH) / 2 + fontSize;
+
+  const textEl = createSVGElement('text', {
+    x: x + w / 2, y: startY,
+    'text-anchor': 'middle',
+    fill: textColor,
+    'font-size': fontSize,
+    'font-family': 'system-ui, sans-serif',
+    'pointer-events': 'none'
+  });
+  textEl.classList.add('node-text');
+
+  lines.forEach((line, i) => {
+    const tspan = createSVGElement('tspan', {
+      x: x + w / 2,
+      dy: i === 0 ? 0 : lineHeight,
+    });
+    tspan.textContent = line;
+    textEl.appendChild(tspan);
+  });
+  g.appendChild(textEl);
+}
+
+function renderNodePorts(g, node) {
+  for (const port of ['top', 'bottom', 'left', 'right']) {
+    const pos = getPortPos(node, port);
+    const circle = createSVGElement('circle', {
+      cx: pos.x, cy: pos.y, r: 6,
+      class: 'node-port',
+      'data-node-id': node.id,
+      'data-port': port,
+    });
+    g.appendChild(circle);
+  }
+}
+
+function renderNodes() {
+  layerNodes.innerHTML = '';
+  const selected = new Set(store.selectedIds);
+
+  for (const node of Object.values(store.nodes)) {
+    const g = createSVGElement('g', {
+      class: 'node-group' + (selected.has(node.id) ? ' selected' : ''),
+      'data-node-id': node.id
+    });
+    renderNodeShape(g, node);
+    renderNodeText(g, node);
+    renderNodePorts(g, node);
+    layerNodes.appendChild(g);
+  }
+
+  // Render resize handles for single selected node
+  layerSelection.innerHTML = '';
+  if (store.selectedIds.length === 1) {
+    const node = store.nodes[store.selectedIds[0]];
+    if (node) renderResizeHandles(node);
+  }
+
+  // Selection highlight
+  for (const id of store.selectedIds) {
+    const node = store.nodes[id];
+    if (!node) continue;
+    const rect = createSVGElement('rect', {
+      x: node.x - 3, y: node.y - 3,
+      width: node.width + 6, height: node.height + 6,
+      rx: 4, fill: 'none',
+      stroke: '#0078d4', 'stroke-width': 2, 'stroke-dasharray': '5 3',
+      'pointer-events': 'none'
+    });
+    layerSelection.appendChild(rect);
+  }
+}
+
+function renderResizeHandles(node) {
+  const { x, y, width: w, height: h, id } = node;
+  const s = 8;
+  const handles = [
+    { name: 'top-left',     cx: x,         cy: y,         cursor: 'nwse' },
+    { name: 'top',          cx: x + w / 2, cy: y,         cursor: 'ns' },
+    { name: 'top-right',    cx: x + w,     cy: y,         cursor: 'nesw' },
+    { name: 'right',        cx: x + w,     cy: y + h / 2, cursor: 'ew' },
+    { name: 'bottom-right', cx: x + w,     cy: y + h,     cursor: 'nwse' },
+    { name: 'bottom',       cx: x + w / 2, cy: y + h,     cursor: 'ns' },
+    { name: 'bottom-left',  cx: x,         cy: y + h,     cursor: 'nesw' },
+    { name: 'left',         cx: x,         cy: y + h / 2, cursor: 'ew' },
+  ];
+  for (const h of handles) {
+    const rect = createSVGElement('rect', {
+      x: h.cx - s / 2, y: h.cy - s / 2,
+      width: s, height: s,
+      class: `resize-handle h-${h.name}`,
+      'data-handle': h.name,
+      'data-node-id': id,
+      cursor: h.cursor + '-resize',
+      fill: '#ffffff', stroke: '#0078d4', 'stroke-width': 1.5,
+    });
+    layerSelection.appendChild(rect);
+  }
+}
+
+function renderConnections() {
+  layerConnections.innerHTML = '';
+  const selected = new Set(store.selectedIds);
+
+  for (const conn of Object.values(store.connections)) {
+    const fromNode = store.nodes[conn.from];
+    const toNode = store.nodes[conn.to];
+    if (!fromNode || !toNode) continue;
+
+    const points = routeConnection(fromNode, conn.fromPort, toNode, conn.toPort);
+    const d = pointsToPath(points);
+    const isSel = selected.has(conn.id);
+    const color = isSel ? '#0078d4' : (conn.color || '#569cd6');
+
+    const g = createSVGElement('g', { 'data-conn-id': conn.id });
+
+    // Hit area (wider invisible path)
+    const hit = createSVGElement('path', {
+      d, class: 'connection-hit',
+      'data-conn-id': conn.id,
+    });
+    g.appendChild(hit);
+
+    // Visible line
+    const markerUrl = isSel ? 'url(#arrowhead-selected)' : 'url(#arrowhead)';
+    // update arrowhead color
+    const line = createSVGElement('path', {
+      d, class: 'connection-line',
+      stroke: color,
+      'stroke-dasharray': conn.lineStyle === 'dashed' ? '8 4' : 'none',
+      'marker-end': markerUrl,
+      'data-conn-id': conn.id,
+    });
+    if (isSel) line.setAttribute('stroke-width', '3');
+    g.appendChild(line);
+
+    // dynamic arrowhead color
+    if (!isSel) {
+      const markerId = 'arrow-' + conn.id;
+      const marker = createSVGElement('marker', {
+        id: markerId, markerWidth: 10, markerHeight: 7,
+        refX: 9, refY: 3.5, orient: 'auto', markerUnits: 'strokeWidth'
+      });
+      const poly = createSVGElement('polygon', {
+        points: '0 0, 10 3.5, 0 7', fill: color
+      });
+      marker.appendChild(poly);
+      g.appendChild(marker);
+      line.setAttribute('marker-end', `url(#${markerId})`);
+    }
+
+    // Label
+    if (conn.label) {
+      const mid = points.length >= 3
+        ? { x: (points[1].x + points[points.length - 2].x) / 2, y: (points[1].y + points[points.length - 2].y) / 2 }
+        : { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+      // label background
+      const tw = measureTextWidth(conn.label, 12) + 8;
+      const bg = createSVGElement('rect', {
+        x: mid.x - tw / 2, y: mid.y - 9,
+        width: tw, height: 18, rx: 3,
+        fill: '#1e1e1e', 'fill-opacity': 0.85,
+        'pointer-events': 'none'
+      });
+      g.appendChild(bg);
+      const label = createSVGElement('text', {
+        x: mid.x, y: mid.y + 4,
+        'text-anchor': 'middle',
+        class: 'connection-label',
+        fill: color,
+      });
+      label.textContent = conn.label;
+      g.appendChild(label);
+    }
+
+    layerConnections.appendChild(g);
+  }
+}
+
+function render() {
+  updateViewportTransform();
+  renderNodes();
+  renderConnections();
+  updateGrid();
+  updatePropertiesPanel();
+  updateStatusBar();
+  scheduleMinimap();
+}
+
+function updateGrid() {
+  const gridRect = $('#grid-rect');
+  if (store.gridVisible) {
+    gridRect.style.display = '';
+  } else {
+    gridRect.style.display = 'none';
+  }
+}
+
+function updateStatusBar() {
+  const modeNames = { select: 'Select', connect: 'Connect', place: 'Place ' + (store.placeType || '') };
+  $('#status-mode').textContent = modeNames[store.mode] || store.mode;
+  const nc = Object.keys(store.nodes).length;
+  const cc = Object.keys(store.connections).length;
+  const sc = store.selectedIds.length;
+  let info = `${nc} nodes, ${cc} connections`;
+  if (sc > 0) info += ` | ${sc} selected`;
+  info += store.gridSnap ? ' | Snap ON' : ' | Snap OFF';
+  $('#status-info').textContent = info;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROPERTIES PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function updatePropertiesPanel() {
+  const panel = $('#panel-content');
+  const selNodes = store.selectedIds.filter(id => store.nodes[id]).map(id => store.nodes[id]);
+  const selConns = store.selectedIds.filter(id => store.connections[id]).map(id => store.connections[id]);
+
+  if (selNodes.length === 1 && selConns.length === 0) {
+    renderNodeProps(panel, selNodes[0]);
+  } else if (selConns.length === 1 && selNodes.length === 0) {
+    renderConnProps(panel, selConns[0]);
+  } else if (store.selectedIds.length > 1) {
+    renderMultiProps(panel, selNodes, selConns);
+  } else {
+    renderCanvasProps(panel);
+  }
+}
+
+function renderNodeProps(panel, node) {
+  const types = { process: 'Process', decision: 'Decision', startend: 'Start/End', io: 'I/O', comment: 'Comment' };
+  panel.innerHTML = `
+    <div class="panel-section">
+      <h4>${types[node.type] || node.type} Node</h4>
+      <div class="prop-row">
+        <label>Text</label>
+        <textarea id="prop-text" rows="3">${escHtml(node.text || '')}</textarea>
+      </div>
+      <div class="prop-row-pair">
+        <div class="prop-row">
+          <label>X</label>
+          <input type="number" id="prop-x" value="${Math.round(node.x)}" step="${store.gridSize}">
+        </div>
+        <div class="prop-row">
+          <label>Y</label>
+          <input type="number" id="prop-y" value="${Math.round(node.y)}" step="${store.gridSize}">
+        </div>
+      </div>
+      <div class="prop-row-pair">
+        <div class="prop-row">
+          <label>W</label>
+          <input type="number" id="prop-w" value="${Math.round(node.width)}" min="40" step="${store.gridSize}">
+        </div>
+        <div class="prop-row">
+          <label>H</label>
+          <input type="number" id="prop-h" value="${Math.round(node.height)}" min="30" step="${store.gridSize}">
+        </div>
+      </div>
+      <div class="prop-row">
+        <label>Fill</label>
+        <input type="color" id="prop-color" value="${node.color}">
+      </div>
+      <div class="prop-row">
+        <label>Text</label>
+        <input type="color" id="prop-textcolor" value="${node.textColor}">
+      </div>
+      <div class="prop-row">
+        <label>Size</label>
+        <input type="number" id="prop-fontsize" value="${node.fontSize}" min="8" max="36" step="1">
+      </div>
+    </div>
+  `;
+  const bind = (sel, prop, parse) => {
+    const el = panel.querySelector(sel);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const v = parse ? parse(el.value) : el.value;
+      dispatch('UPDATE_NODE_PROPS', { id: node.id, props: { [prop]: v } });
+    });
+  };
+  bind('#prop-text', 'text');
+  bind('#prop-x', 'x', Number);
+  bind('#prop-y', 'y', Number);
+  bind('#prop-w', 'width', v => Math.max(40, Number(v)));
+  bind('#prop-h', 'height', v => Math.max(30, Number(v)));
+  bind('#prop-color', 'color');
+  bind('#prop-textcolor', 'textColor');
+  bind('#prop-fontsize', 'fontSize', Number);
+}
+
+function renderConnProps(panel, conn) {
+  const fromNode = store.nodes[conn.from];
+  const toNode = store.nodes[conn.to];
+  panel.innerHTML = `
+    <div class="panel-section">
+      <h4>Connection</h4>
+      <div class="info-row"><span class="label">From</span><span class="value">${escHtml((fromNode?.text || conn.from).substring(0, 20))}</span></div>
+      <div class="info-row"><span class="label">To</span><span class="value">${escHtml((toNode?.text || conn.to).substring(0, 20))}</span></div>
+      <div class="prop-row" style="margin-top:8px">
+        <label>Label</label>
+        <input type="text" id="prop-clabel" value="${escHtml(conn.label || '')}">
+      </div>
+      <div class="prop-row">
+        <label>Color</label>
+        <input type="color" id="prop-ccolor" value="${conn.color || '#569cd6'}">
+      </div>
+      <div class="prop-row">
+        <label>Style</label>
+        <select id="prop-cstyle">
+          <option value="solid" ${conn.lineStyle !== 'dashed' ? 'selected' : ''}>Solid</option>
+          <option value="dashed" ${conn.lineStyle === 'dashed' ? 'selected' : ''}>Dashed</option>
+        </select>
+      </div>
+    </div>
+  `;
+  const bind = (sel, prop, parse) => {
+    const el = panel.querySelector(sel);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      dispatch('UPDATE_CONNECTION_PROPS', { id: conn.id, props: { [prop]: parse ? parse(el.value) : el.value } });
+    });
+  };
+  bind('#prop-clabel', 'label');
+  bind('#prop-ccolor', 'color');
+  bind('#prop-cstyle', 'lineStyle');
+}
+
+function renderMultiProps(panel, nodes, conns) {
+  const total = nodes.length + conns.length;
+  panel.innerHTML = `
+    <div class="panel-section">
+      <h4>Multiple Selection</h4>
+      <div class="info-row"><span class="label">Selected</span><span class="value">${total} items</span></div>
+      <div class="info-row"><span class="label">Nodes</span><span class="value">${nodes.length}</span></div>
+      <div class="info-row"><span class="label">Connections</span><span class="value">${conns.length}</span></div>
+    </div>
+    ${nodes.length >= 2 ? `
+    <div class="panel-section">
+      <h4>Align</h4>
+      <div class="align-buttons">
+        <button class="align-btn" data-align="left" title="Align Left">L</button>
+        <button class="align-btn" data-align="center" title="Align Center">C</button>
+        <button class="align-btn" data-align="right" title="Align Right">R</button>
+        <button class="align-btn" data-align="top" title="Align Top">T</button>
+        <button class="align-btn" data-align="middle" title="Align Middle">M</button>
+        <button class="align-btn" data-align="bottom" title="Align Bottom">B</button>
+      </div>
+      <h4 style="margin-top:10px">Distribute</h4>
+      <div class="align-buttons">
+        <button class="align-btn" data-distribute="h" title="Distribute Horizontal" style="width:60px">Horiz</button>
+        <button class="align-btn" data-distribute="v" title="Distribute Vertical" style="width:60px">Vert</button>
+      </div>
+    </div>` : ''}
+    <div class="panel-section">
+      <button class="modal-btn" style="width:100%;background:var(--danger);border-color:var(--danger);color:#fff" id="delete-all-btn">Delete All Selected</button>
+    </div>
+  `;
+
+  panel.querySelectorAll('[data-align]').forEach(btn => {
+    btn.addEventListener('click', () => alignNodes(nodes, btn.dataset.align));
+  });
+  panel.querySelectorAll('[data-distribute]').forEach(btn => {
+    btn.addEventListener('click', () => distributeNodes(nodes, btn.dataset.distribute));
+  });
+  const delBtn = panel.querySelector('#delete-all-btn');
+  if (delBtn) delBtn.addEventListener('click', deleteSelected);
+}
+
+function renderCanvasProps(panel) {
+  const nc = Object.keys(store.nodes).length;
+  const cc = Object.keys(store.connections).length;
+  panel.innerHTML = `
+    <div class="panel-section">
+      <h4>Canvas</h4>
+      <div class="info-row"><span class="label">Nodes</span><span class="value">${nc}</span></div>
+      <div class="info-row"><span class="label">Connections</span><span class="value">${cc}</span></div>
+      <div class="info-row"><span class="label">Zoom</span><span class="value">${Math.round(store.viewport.zoom * 100)}%</span></div>
+    </div>
+    <div class="panel-section">
+      <h4>Grid</h4>
+      <div class="prop-row">
+        <label>Size</label>
+        <input type="number" id="prop-gridsize" value="${store.gridSize}" min="5" max="100" step="5">
+      </div>
+      <div class="prop-row">
+        <label>Snap</label>
+        <input type="checkbox" id="prop-gridsnap" ${store.gridSnap ? 'checked' : ''} style="width:auto">
+      </div>
+    </div>
+  `;
+  const gsEl = panel.querySelector('#prop-gridsize');
+  if (gsEl) gsEl.addEventListener('input', () => {
+    store.gridSize = Math.max(5, Number(gsEl.value));
+    render();
+  });
+  const snapEl = panel.querySelector('#prop-gridsnap');
+  if (snapEl) snapEl.addEventListener('change', () => {
+    store.gridSnap = snapEl.checked;
+    render();
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ALIGNMENT & DISTRIBUTION
+// ═══════════════════════════════════════════════════════════════
+
+function alignNodes(nodes, dir) {
+  if (nodes.length < 2) return;
+  pushUndo();
+  const moves = [];
+  switch (dir) {
+    case 'left': {
+      const minX = Math.min(...nodes.map(n => n.x));
+      nodes.forEach(n => moves.push({ id: n.id, x: minX, y: n.y }));
+      break;
+    }
+    case 'center': {
+      const avgCx = nodes.reduce((s, n) => s + n.x + n.width / 2, 0) / nodes.length;
+      nodes.forEach(n => moves.push({ id: n.id, x: avgCx - n.width / 2, y: n.y }));
+      break;
+    }
+    case 'right': {
+      const maxR = Math.max(...nodes.map(n => n.x + n.width));
+      nodes.forEach(n => moves.push({ id: n.id, x: maxR - n.width, y: n.y }));
+      break;
+    }
+    case 'top': {
+      const minY = Math.min(...nodes.map(n => n.y));
+      nodes.forEach(n => moves.push({ id: n.id, x: n.x, y: minY }));
+      break;
+    }
+    case 'middle': {
+      const avgCy = nodes.reduce((s, n) => s + n.y + n.height / 2, 0) / nodes.length;
+      nodes.forEach(n => moves.push({ id: n.id, x: n.x, y: avgCy - n.height / 2 }));
+      break;
+    }
+    case 'bottom': {
+      const maxB = Math.max(...nodes.map(n => n.y + n.height));
+      nodes.forEach(n => moves.push({ id: n.id, x: n.x, y: maxB - n.height }));
+      break;
+    }
+  }
+  dispatch('MOVE_NODES_FINAL', { moves });
+}
+
+function distributeNodes(nodes, dir) {
+  if (nodes.length < 3) return;
+  pushUndo();
+  const sorted = [...nodes];
+  const moves = [];
+  if (dir === 'h') {
+    sorted.sort((a, b) => a.x - b.x);
+    const minX = sorted[0].x;
+    const maxX = sorted[sorted.length - 1].x;
+    const step = (maxX - minX) / (sorted.length - 1);
+    sorted.forEach((n, i) => moves.push({ id: n.id, x: minX + step * i, y: n.y }));
+  } else {
+    sorted.sort((a, b) => a.y - b.y);
+    const minY = sorted[0].y;
+    const maxY = sorted[sorted.length - 1].y;
+    const step = (maxY - minY) / (sorted.length - 1);
+    sorted.forEach((n, i) => moves.push({ id: n.id, x: n.x, y: minY + step * i }));
+  }
+  dispatch('MOVE_NODES_FINAL', { moves });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POINTER INTERACTION ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+let dragState = null;
+let marqueeState = null;
+let connectDragState = null;
+let resizeState = null;
+let panState = null;
+let spaceHeld = false;
+
+container.addEventListener('pointerdown', onPointerDown);
+container.addEventListener('pointermove', onPointerMove);
+container.addEventListener('pointerup', onPointerUp);
+container.addEventListener('wheel', onWheel, { passive: false });
+container.addEventListener('dblclick', onDoubleClick);
+container.addEventListener('contextmenu', onContextMenu);
+
+function onPointerDown(e) {
+  if (e.button === 2) return; // handled by contextmenu
+
+  const canvas = screenToCanvas(e.clientX, e.clientY);
+  $('#status-coords').textContent = `${Math.round(canvas.x)}, ${Math.round(canvas.y)}`;
+
+  closeContextMenu();
+  closeInlineEditor();
+
+  // Middle button or space held → pan
+  if (e.button === 1 || spaceHeld) {
+    e.preventDefault();
+    panState = { startX: e.clientX, startY: e.clientY, vpX: store.viewport.x, vpY: store.viewport.y };
+    container.setPointerCapture(e.pointerId);
+    container.classList.add('mode-panning');
+    return;
+  }
+
+  // Check if clicking resize handle
+  const handleEl = e.target.closest('.resize-handle');
+  if (handleEl) {
+    e.preventDefault();
+    const nodeId = handleEl.dataset.nodeId;
+    const handle = handleEl.dataset.handle;
+    const node = store.nodes[nodeId];
+    if (!node) return;
+    resizeState = {
+      nodeId, handle,
+      startX: canvas.x, startY: canvas.y,
+      origX: node.x, origY: node.y, origW: node.width, origH: node.height
+    };
+    container.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  // Check port click
+  const portEl = e.target.closest('.node-port');
+  if (portEl || store.mode === 'connect') {
+    e.preventDefault();
+    let fromNodeId, fromPort;
+    if (portEl) {
+      fromNodeId = portEl.dataset.nodeId;
+      fromPort = portEl.dataset.port;
+    } else {
+      // find nearest node port
+      const hit = hitTestNode(canvas.x, canvas.y);
+      if (hit) {
+        fromNodeId = hit.id;
+        fromPort = nearestPort(hit, canvas.x, canvas.y);
+      }
+    }
+    if (fromNodeId) {
+      connectDragState = { fromNodeId, fromPort, mx: canvas.x, my: canvas.y };
+      container.setPointerCapture(e.pointerId);
+      return;
+    }
+  }
+
+  // Place mode
+  if (store.mode === 'place' && store.placeType) {
+    e.preventDefault();
+    const defs = NODE_DEFAULTS[store.placeType];
+    let nx = canvas.x - defs.width / 2;
+    let ny = canvas.y - defs.height / 2;
+    if (store.gridSnap) { nx = snapTo(nx, store.gridSize); ny = snapTo(ny, store.gridSize); }
+    const id = uid();
+    dispatch('ADD_NODE', {
+      id, type: store.placeType,
+      x: nx, y: ny, width: defs.width, height: defs.height,
+      text: store.placeType === 'startend' ? 'Start' : store.placeType === 'comment' ? 'Note' : 'Process',
+      color: defs.color, textColor: defs.textColor, fontSize: defs.fontSize
+    });
+    dispatch('SET_SELECTION', [id]);
+    // stay in place mode for rapid placement, or switch back
+    // dispatch('SET_MODE', { mode: 'select' });
+    return;
+  }
+
+  // Hit test nodes (top-down)
+  const hitNode = hitTestNode(canvas.x, canvas.y);
+  const hitConn = hitTestConnection(e.target);
+
+  if (hitNode) {
+    e.preventDefault();
+    const id = hitNode.id;
+    if (e.shiftKey) {
+      const sel = store.selectedIds.includes(id)
+        ? store.selectedIds.filter(s => s !== id)
+        : [...store.selectedIds, id];
+      dispatch('SET_SELECTION', sel);
+    } else {
+      if (!store.selectedIds.includes(id)) {
+        dispatch('SET_SELECTION', [id]);
+      }
+    }
+    // Start drag
+    const selectedNodes = store.selectedIds.filter(i => store.nodes[i]);
+    const origins = {};
+    for (const sid of selectedNodes) {
+      origins[sid] = { x: store.nodes[sid].x, y: store.nodes[sid].y };
+    }
+    dragState = {
+      startX: canvas.x, startY: canvas.y,
+      origins, moved: false
+    };
+    container.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  if (hitConn) {
+    e.preventDefault();
+    const cid = hitConn;
+    if (e.shiftKey) {
+      const sel = store.selectedIds.includes(cid)
+        ? store.selectedIds.filter(s => s !== cid)
+        : [...store.selectedIds, cid];
+      dispatch('SET_SELECTION', sel);
+    } else {
+      dispatch('SET_SELECTION', [cid]);
+    }
+    return;
+  }
+
+  // Empty space → marquee or deselect
+  if (!e.shiftKey) dispatch('SET_SELECTION', []);
+  marqueeState = { startX: canvas.x, startY: canvas.y, curX: canvas.x, curY: canvas.y };
+  container.setPointerCapture(e.pointerId);
+}
+
+function onPointerMove(e) {
+  const canvas = screenToCanvas(e.clientX, e.clientY);
+  $('#status-coords').textContent = `${Math.round(canvas.x)}, ${Math.round(canvas.y)}`;
+
+  // Pan
+  if (panState) {
+    const dx = e.clientX - panState.startX;
+    const dy = e.clientY - panState.startY;
+    dispatch('SET_VIEWPORT', { x: panState.vpX + dx, y: panState.vpY + dy });
+    return;
+  }
+
+  // Resize
+  if (resizeState) {
+    const dx = canvas.x - resizeState.startX;
+    const dy = canvas.y - resizeState.startY;
+    const h = resizeState.handle;
+    let { origX: nx, origY: ny, origW: nw, origH: nh } = resizeState;
+
+    if (h.includes('right'))  nw = Math.max(40, nw + dx);
+    if (h.includes('left'))   { nw = Math.max(40, nw - dx); nx = nx + (resizeState.origW - nw); }
+    if (h.includes('bottom')) nh = Math.max(30, nh + dy);
+    if (h.includes('top'))    { nh = Math.max(30, nh - dy); ny = ny + (resizeState.origH - nh); }
+
+    if (store.gridSnap) {
+      nx = snapTo(nx, store.gridSize);
+      ny = snapTo(ny, store.gridSize);
+      nw = snapTo(nw, store.gridSize) || store.gridSize;
+      nh = snapTo(nh, store.gridSize) || store.gridSize;
+    }
+
+    const node = store.nodes[resizeState.nodeId];
+    if (node) {
+      node.x = nx; node.y = ny; node.width = nw; node.height = nh;
+      render();
+    }
+    return;
+  }
+
+  // Connect drag
+  if (connectDragState) {
+    connectDragState.mx = canvas.x;
+    connectDragState.my = canvas.y;
+    renderConnectPreview();
+    return;
+  }
+
+  // Node drag
+  if (dragState) {
+    const dx = canvas.x - dragState.startX;
+    const dy = canvas.y - dragState.startY;
+    if (!dragState.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) dragState.moved = true;
+    if (dragState.moved) {
+      const moves = [];
+      for (const [id, orig] of Object.entries(dragState.origins)) {
+        let nx = orig.x + dx;
+        let ny = orig.y + dy;
+        if (store.gridSnap) { nx = snapTo(nx, store.gridSize); ny = snapTo(ny, store.gridSize); }
+        moves.push({ id, x: nx, y: ny });
+      }
+      dispatch('MOVE_NODES', { moves });
+    }
+    return;
+  }
+
+  // Marquee
+  if (marqueeState) {
+    marqueeState.curX = canvas.x;
+    marqueeState.curY = canvas.y;
+    renderMarquee();
+    return;
+  }
+}
+
+function onPointerUp(e) {
+  // Pan end
+  if (panState) {
+    panState = null;
+    container.classList.remove('mode-panning');
+    container.releasePointerCapture(e.pointerId);
+    return;
+  }
+
+  // Resize end
+  if (resizeState) {
+    const node = store.nodes[resizeState.nodeId];
+    if (node) {
+      // push to undo properly
+      store.nodes[resizeState.nodeId].x = resizeState.origX;
+      store.nodes[resizeState.nodeId].y = resizeState.origY;
+      store.nodes[resizeState.nodeId].width = resizeState.origW;
+      store.nodes[resizeState.nodeId].height = resizeState.origH;
+      const dx = screenToCanvas(e.clientX, e.clientY).x - resizeState.startX;
+      const dy = screenToCanvas(e.clientX, e.clientY).y - resizeState.startY;
+      let { origX: nx, origY: ny, origW: nw, origH: nh } = resizeState;
+      const h = resizeState.handle;
+      if (h.includes('right'))  nw = Math.max(40, nw + dx);
+      if (h.includes('left'))   { nw = Math.max(40, nw - dx); nx += resizeState.origW - nw; }
+      if (h.includes('bottom')) nh = Math.max(30, nh + dy);
+      if (h.includes('top'))    { nh = Math.max(30, nh - dy); ny += resizeState.origH - nh; }
+      if (store.gridSnap) { nx = snapTo(nx, store.gridSize); ny = snapTo(ny, store.gridSize); nw = snapTo(nw, store.gridSize) || store.gridSize; nh = snapTo(nh, store.gridSize) || store.gridSize; }
+      dispatch('RESIZE_NODE', { id: resizeState.nodeId, props: { x: nx, y: ny, width: nw, height: nh } });
+    }
+    resizeState = null;
+    container.releasePointerCapture(e.pointerId);
+    return;
+  }
+
+  // Connect end
+  if (connectDragState) {
+    const canvas = screenToCanvas(e.clientX, e.clientY);
+    const targetNode = hitTestNode(canvas.x, canvas.y);
+    if (targetNode && targetNode.id !== connectDragState.fromNodeId) {
+      const toPort = nearestPort(targetNode, canvas.x, canvas.y);
+      dispatch('ADD_CONNECTION', {
+        id: cuid(),
+        from: connectDragState.fromNodeId,
+        fromPort: connectDragState.fromPort,
+        to: targetNode.id,
+        toPort: toPort,
+        label: '',
+        color: '#569cd6',
+        lineStyle: 'solid'
+      });
+    }
+    connectDragState = null;
+    layerDragPreview.innerHTML = '';
+    container.releasePointerCapture(e.pointerId);
+    return;
+  }
+
+  // Drag end
+  if (dragState) {
+    if (dragState.moved) {
+      // Final positions are already set; push undo
+      const moves = [];
+      for (const id of Object.keys(dragState.origins)) {
+        const n = store.nodes[id];
+        if (n) moves.push({ id, x: n.x, y: n.y });
+      }
+      // Restore originals for proper undo then commit
+      for (const [id, orig] of Object.entries(dragState.origins)) {
+        if (store.nodes[id]) { store.nodes[id].x = orig.x; store.nodes[id].y = orig.y; }
+      }
+      dispatch('MOVE_NODES_FINAL', { moves });
+    }
+    dragState = null;
+    container.releasePointerCapture(e.pointerId);
+    return;
+  }
+
+  // Marquee end
+  if (marqueeState) {
+    const x1 = Math.min(marqueeState.startX, marqueeState.curX);
+    const y1 = Math.min(marqueeState.startY, marqueeState.curY);
+    const x2 = Math.max(marqueeState.startX, marqueeState.curX);
+    const y2 = Math.max(marqueeState.startY, marqueeState.curY);
+    if (Math.abs(x2 - x1) > 5 || Math.abs(y2 - y1) > 5) {
+      const sel = [];
+      for (const n of Object.values(store.nodes)) {
+        if (n.x + n.width > x1 && n.x < x2 && n.y + n.height > y1 && n.y < y2) {
+          sel.push(n.id);
+        }
+      }
+      dispatch('SET_SELECTION', sel);
+    }
+    marqueeState = null;
+    layerDragPreview.innerHTML = '';
+    container.releasePointerCapture(e.pointerId);
+    return;
+  }
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const rect = svgEl.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const oldZoom = store.viewport.zoom;
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const newZoom = clamp(oldZoom * delta, 0.1, 5.0);
+
+  const wx = (mx - store.viewport.x) / oldZoom;
+  const wy = (my - store.viewport.y) / oldZoom;
+  const newX = mx - wx * newZoom;
+  const newY = my - wy * newZoom;
+
+  dispatch('SET_VIEWPORT', { x: newX, y: newY, zoom: newZoom });
+}
+
+function hitTestNode(cx, cy) {
+  const nodes = Object.values(store.nodes);
+  // Reverse order: top-most first
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (cx >= n.x && cx <= n.x + n.width && cy >= n.y && cy <= n.y + n.height) {
+      return n;
+    }
+  }
+  return null;
+}
+
+function hitTestConnection(target) {
+  const el = target.closest('[data-conn-id]');
+  return el ? el.dataset.connId : null;
+}
+
+function renderConnectPreview() {
+  layerDragPreview.innerHTML = '';
+  if (!connectDragState) return;
+  const fromNode = store.nodes[connectDragState.fromNodeId];
+  if (!fromNode) return;
+  const p1 = getPortPos(fromNode, connectDragState.fromPort);
+  const p2 = { x: connectDragState.mx, y: connectDragState.my };
+  const d = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+  const line = createSVGElement('path', { d, class: 'drag-preview-line' });
+  layerDragPreview.appendChild(line);
+}
+
+function renderMarquee() {
+  layerDragPreview.innerHTML = '';
+  if (!marqueeState) return;
+  const x = Math.min(marqueeState.startX, marqueeState.curX);
+  const y = Math.min(marqueeState.startY, marqueeState.curY);
+  const w = Math.abs(marqueeState.curX - marqueeState.startX);
+  const h = Math.abs(marqueeState.curY - marqueeState.startY);
+  const rect = createSVGElement('rect', { x, y, width: w, height: h, class: 'selection-marquee' });
+  layerDragPreview.appendChild(rect);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DOUBLE-CLICK INLINE EDIT
+// ═══════════════════════════════════════════════════════════════
+
+let inlineEditNodeId = null;
+
+function onDoubleClick(e) {
+  const canvas = screenToCanvas(e.clientX, e.clientY);
+  const node = hitTestNode(canvas.x, canvas.y);
+  if (!node) return;
+  openInlineEditor(node);
+}
+
+function openInlineEditor(node) {
+  inlineEditNodeId = node.id;
+  const editorDiv = $('#inline-editor');
+  const textarea = editorDiv.querySelector('textarea');
+  const screen = canvasToScreen(node.x, node.y);
+  const w = node.width * store.viewport.zoom;
+  const h = node.height * store.viewport.zoom;
+
+  editorDiv.style.display = 'block';
+  editorDiv.style.left = screen.x + 'px';
+  editorDiv.style.top = screen.y + 'px';
+  textarea.style.width = w + 'px';
+  textarea.style.height = h + 'px';
+  textarea.style.fontSize = (node.fontSize * store.viewport.zoom) + 'px';
+  textarea.value = node.text || '';
+  textarea.focus();
+  textarea.select();
+}
+
+function closeInlineEditor() {
+  const editorDiv = $('#inline-editor');
+  if (editorDiv.style.display === 'none' || !inlineEditNodeId) return;
+  const textarea = editorDiv.querySelector('textarea');
+  const newText = textarea.value;
+  if (store.nodes[inlineEditNodeId] && store.nodes[inlineEditNodeId].text !== newText) {
+    dispatch('UPDATE_NODE_PROPS', { id: inlineEditNodeId, props: { text: newText } });
+  }
+  editorDiv.style.display = 'none';
+  inlineEditNodeId = null;
+}
+
+$('#inline-editor textarea').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeInlineEditor(); e.stopPropagation(); }
+  if (e.key === 'Enter' && !e.shiftKey) { closeInlineEditor(); e.preventDefault(); e.stopPropagation(); }
+  e.stopPropagation(); // don't trigger global shortcuts
+});
+
+$('#inline-editor textarea').addEventListener('blur', () => {
+  setTimeout(closeInlineEditor, 100);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CONTEXT MENU
+// ═══════════════════════════════════════════════════════════════
+
+const ctxMenu = $('#context-menu');
+
+function onContextMenu(e) {
+  e.preventDefault();
+  const canvas = screenToCanvas(e.clientX, e.clientY);
+  const node = hitTestNode(canvas.x, canvas.y);
+  const conn = hitTestConnection(e.target);
+
+  let items = [];
+
+  if (node) {
+    if (!store.selectedIds.includes(node.id)) {
+      dispatch('SET_SELECTION', [node.id]);
+    }
+    items = [
+      { label: 'Edit Text', action: () => openInlineEditor(store.nodes[node.id]) },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => duplicateSelected() },
+      { sep: true },
+      { label: 'Bring to Front', action: () => {} },
+      { sep: true },
+      { label: 'Delete', shortcut: 'Del', action: deleteSelected, danger: true },
+    ];
+  } else if (conn) {
+    dispatch('SET_SELECTION', [conn]);
+    items = [
+      { label: 'Edit Label', action: () => {} },
+      { sep: true },
+      { label: 'Delete', shortcut: 'Del', action: deleteSelected, danger: true },
+    ];
+  } else {
+    items = [
+      { label: 'Add Process', action: () => addNodeAt('process', canvas.x, canvas.y) },
+      { label: 'Add Decision', action: () => addNodeAt('decision', canvas.x, canvas.y) },
+      { label: 'Add Start/End', action: () => addNodeAt('startend', canvas.x, canvas.y) },
+      { label: 'Add I/O', action: () => addNodeAt('io', canvas.x, canvas.y) },
+      { label: 'Add Comment', action: () => addNodeAt('comment', canvas.x, canvas.y) },
+      { sep: true },
+      { label: 'Fit All', action: fitAll },
+      { label: 'Select All', shortcut: 'Ctrl+A', action: selectAll },
+      { sep: true },
+      { label: 'Paste', shortcut: 'Ctrl+V', action: pasteClipboard },
+    ];
+  }
+
+  showContextMenu(e.clientX, e.clientY, items);
+}
+
+function showContextMenu(x, y, items) {
+  ctxMenu.innerHTML = '';
+  for (const item of items) {
+    if (item.sep) {
+      ctxMenu.appendChild(Object.assign(document.createElement('div'), { className: 'ctx-sep' }));
+      continue;
+    }
+    const el = document.createElement('div');
+    el.className = 'ctx-item' + (item.danger ? ' danger' : '');
+    el.innerHTML = `<span>${item.label}</span>${item.shortcut ? `<span class="shortcut">${item.shortcut}</span>` : ''}`;
+    el.addEventListener('click', () => { closeContextMenu(); item.action(); });
+    ctxMenu.appendChild(el);
+  }
+  // Position
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top = y + 'px';
+  ctxMenu.classList.add('visible');
+  // Clamp to viewport
+  requestAnimationFrame(() => {
+    const r = ctxMenu.getBoundingClientRect();
+    if (r.right > window.innerWidth) ctxMenu.style.left = (x - r.width) + 'px';
+    if (r.bottom > window.innerHeight) ctxMenu.style.top = (y - r.height) + 'px';
+  });
+}
+
+function closeContextMenu() {
+  ctxMenu.classList.remove('visible');
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (!ctxMenu.contains(e.target)) closeContextMenu();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLBAR ACTIONS
+// ═══════════════════════════════════════════════════════════════
+
+$('#toolbar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tb-btn');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  if (!action) return;
+
+  switch (action) {
+    case 'add-process':
+    case 'add-decision':
+    case 'add-startend':
+    case 'add-io':
+    case 'add-comment': {
+      const type = action.replace('add-', '');
+      dispatch('SET_MODE', { mode: 'place', placeType: type });
+      updateToolbarActive();
+      updateCursorClass();
+      break;
+    }
+    case 'tool-select':
+      dispatch('SET_MODE', { mode: 'select' });
+      updateToolbarActive();
+      updateCursorClass();
+      break;
+    case 'tool-connect':
+      dispatch('SET_MODE', { mode: 'connect' });
+      updateToolbarActive();
+      updateCursorClass();
+      break;
+    case 'undo': dispatch('UNDO'); break;
+    case 'redo': dispatch('REDO'); break;
+    case 'delete': deleteSelected(); break;
+    case 'auto-layout': autoLayout(); break;
+    case 'zoom-in':
+      zoomBy(1.2);
+      break;
+    case 'zoom-out':
+      zoomBy(0.8);
+      break;
+    case 'fit-all': fitAll(); break;
+    case 'toggle-grid':
+      dispatch('TOGGLE_GRID', 'visible');
+      break;
+    case 'import-json': importJson(); break;
+    case 'export-json': exportJson(); break;
+    case 'export-png': exportPng(); break;
+    case 'load-json': openJsonModal(); break;
+    case 'clear-all':
+      if (Object.keys(store.nodes).length === 0 || confirm('Clear all nodes and connections?')) {
+        dispatch('CLEAR_ALL');
+      }
+      break;
+  }
+});
+
+function updateToolbarActive() {
+  $$('.tb-btn[data-action^="tool-"]').forEach(b => b.classList.remove('active'));
+  if (store.mode === 'select') $('[data-action="tool-select"]')?.classList.add('active');
+  if (store.mode === 'connect') $('[data-action="tool-connect"]')?.classList.add('active');
+}
+
+function updateCursorClass() {
+  container.className = '';
+  if (store.mode === 'select') container.classList.add('mode-select');
+  else if (store.mode === 'connect') container.classList.add('mode-connect');
+  else if (store.mode === 'place') container.classList.add('mode-place');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('keydown', (e) => {
+  // Don't intercept if typing in an input/textarea
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  const ctrl = e.ctrlKey || e.metaKey;
+
+  if (e.key === ' ') {
+    spaceHeld = true;
+    container.classList.add('mode-pan');
+    e.preventDefault();
+    return;
+  }
+
+  if (e.key === 'Escape') {
+    closeInlineEditor();
+    closeContextMenu();
+    if (store.mode !== 'select') {
+      dispatch('SET_MODE', { mode: 'select' });
+      updateToolbarActive();
+      updateCursorClass();
+    } else {
+      dispatch('SET_SELECTION', []);
+    }
+    return;
+  }
+
+  if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); e.preventDefault(); return; }
+  if (ctrl && e.key === 'z') { e.preventDefault(); dispatch('UNDO'); return; }
+  if (ctrl && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); dispatch('REDO'); return; }
+  if (ctrl && e.key === 'a') { e.preventDefault(); selectAll(); return; }
+  if (ctrl && e.key === 'c') { e.preventDefault(); copySelected(); return; }
+  if (ctrl && e.key === 'v') { e.preventDefault(); pasteClipboard(); return; }
+  if (ctrl && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
+  if (e.key === 'g' && !ctrl) { dispatch('TOGGLE_GRID', 'snap'); return; }
+  if (e.key === 'v' && !ctrl) { dispatch('SET_MODE', { mode: 'select' }); updateToolbarActive(); updateCursorClass(); return; }
+  if (e.key === 'c' && !ctrl) { dispatch('SET_MODE', { mode: 'connect' }); updateToolbarActive(); updateCursorClass(); return; }
+
+  // Arrow nudge
+  const arrowMap = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+  if (arrowMap[e.key] && store.selectedIds.length > 0) {
+    e.preventDefault();
+    const [dx, dy] = arrowMap[e.key];
+    const step = store.gridSnap ? store.gridSize : 1;
+    const moves = store.selectedIds.filter(id => store.nodes[id]).map(id => ({
+      id, x: store.nodes[id].x + dx * step, y: store.nodes[id].y + dy * step
+    }));
+    if (moves.length) dispatch('MOVE_NODES_FINAL', { moves });
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.key === ' ') {
+    spaceHeld = false;
+    container.classList.remove('mode-pan');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIONS (DELETE, COPY, PASTE, DUPLICATE)
+// ═══════════════════════════════════════════════════════════════
+
+function deleteSelected() {
+  const nodeIds = store.selectedIds.filter(id => store.nodes[id]);
+  const connIds = store.selectedIds.filter(id => store.connections[id]);
+  if (nodeIds.length) dispatch('DELETE_NODES', nodeIds);
+  if (connIds.length) dispatch('DELETE_CONNECTIONS', connIds);
+}
+
+function selectAll() {
+  const allIds = [...Object.keys(store.nodes), ...Object.keys(store.connections)];
+  dispatch('SET_SELECTION', allIds);
+}
+
+function copySelected() {
+  const nodeIds = store.selectedIds.filter(id => store.nodes[id]);
+  if (!nodeIds.length) return;
+  const idSet = new Set(nodeIds);
+  const nodes = nodeIds.map(id => ({ ...store.nodes[id] }));
+  const conns = Object.values(store.connections).filter(c => idSet.has(c.from) && idSet.has(c.to)).map(c => ({ ...c }));
+  store.clipboard = { nodes, connections: conns };
+}
+
+function pasteClipboard() {
+  if (!store.clipboard || !store.clipboard.nodes.length) return;
+  const idMap = {};
+  const newIds = [];
+  for (const n of store.clipboard.nodes) {
+    const newId = uid();
+    idMap[n.id] = newId;
+    dispatch('ADD_NODE', { ...n, id: newId, x: n.x + 20, y: n.y + 20 });
+    newIds.push(newId);
+    n.x += 20;
+    n.y += 20;
+  }
+  for (const c of store.clipboard.connections) {
+    const newFrom = idMap[c.from];
+    const newTo = idMap[c.to];
+    if (newFrom && newTo) {
+      const newId = cuid();
+      dispatch('ADD_CONNECTION', { ...c, id: newId, from: newFrom, to: newTo });
+    }
+    c.from = idMap[c.from] || c.from;
+    c.to = idMap[c.to] || c.to;
+  }
+  dispatch('SET_SELECTION', newIds);
+}
+
+function duplicateSelected() {
+  copySelected();
+  pasteClipboard();
+}
+
+function addNodeAt(type, cx, cy) {
+  const defs = NODE_DEFAULTS[type];
+  let nx = cx - defs.width / 2;
+  let ny = cy - defs.height / 2;
+  if (store.gridSnap) { nx = snapTo(nx, store.gridSize); ny = snapTo(ny, store.gridSize); }
+  const id = uid();
+  dispatch('ADD_NODE', {
+    id, type,
+    x: nx, y: ny, width: defs.width, height: defs.height,
+    text: type === 'startend' ? 'Start' : type === 'comment' ? 'Note' : type.charAt(0).toUpperCase() + type.slice(1),
+    color: defs.color, textColor: defs.textColor, fontSize: defs.fontSize
+  });
+  dispatch('SET_SELECTION', [id]);
+}
+
+function zoomBy(factor) {
+  const rect = svgEl.getBoundingClientRect();
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
+  const oldZoom = store.viewport.zoom;
+  const newZoom = clamp(oldZoom * factor, 0.1, 5.0);
+  const wx = (cx - store.viewport.x) / oldZoom;
+  const wy = (cy - store.viewport.y) / oldZoom;
+  dispatch('SET_VIEWPORT', { x: cx - wx * newZoom, y: cy - wy * newZoom, zoom: newZoom });
+}
+
+function fitAll() {
+  const nodes = Object.values(store.nodes);
+  if (!nodes.length) return;
+  const margin = 60;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.width);
+    maxY = Math.max(maxY, n.y + n.height);
+  }
+  const rect = svgEl.getBoundingClientRect();
+  const cw = rect.width - margin * 2;
+  const ch = rect.height - margin * 2;
+  const dw = maxX - minX || 1;
+  const dh = maxY - minY || 1;
+  const zoom = clamp(Math.min(cw / dw, ch / dh), 0.1, 2.0);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const vpX = rect.width / 2 - cx * zoom;
+  const vpY = rect.height / 2 - cy * zoom;
+  // Animate
+  animateViewport(vpX, vpY, zoom);
+}
+
+function animateViewport(tx, ty, tz) {
+  const sx = store.viewport.x, sy = store.viewport.y, sz = store.viewport.zoom;
+  const duration = 300;
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    dispatch('SET_VIEWPORT', {
+      x: lerp(sx, tx, ease),
+      y: lerp(sy, ty, ease),
+      zoom: lerp(sz, tz, ease),
+    });
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JSON IMPORT / EXPORT
+// ═══════════════════════════════════════════════════════════════
+
+function exportJson() {
+  const data = {
+    version: 1,
+    nodes: Object.values(store.nodes).map(n => ({
+      id: n.id, type: n.type, x: n.x, y: n.y, width: n.width, height: n.height,
+      text: n.text, color: n.color, textColor: n.textColor, fontSize: n.fontSize
+    })),
+    connections: Object.values(store.connections).map(c => ({
+      id: c.id, from: c.from, fromPort: c.fromPort, to: c.to, toPort: c.toPort,
+      label: c.label, color: c.color, lineStyle: c.lineStyle
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'logic-flow.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJson() {
+  const input = $('#file-input');
+  input.value = '';
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        loadJsonData(data);
+      } catch (err) {
+        alert('Invalid JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function loadJsonData(data) {
+  if (!data || !data.nodes) { alert('Invalid diagram format'); return; }
+  dispatch('IMPORT_STATE', data);
+  setTimeout(fitAll, 50);
+}
+
+function openJsonModal() {
+  $('#json-modal').classList.remove('hidden');
+  $('#json-textarea').value = '';
+  $('#json-textarea').focus();
+}
+
+function closeJsonModal() {
+  $('#json-modal').classList.add('hidden');
+}
+
+function loadJsonFromModal() {
+  const text = $('#json-textarea').value.trim();
+  if (!text) { closeJsonModal(); return; }
+  try {
+    const data = JSON.parse(text);
+    loadJsonData(data);
+    closeJsonModal();
+  } catch (err) {
+    alert('Invalid JSON: ' + err.message);
+  }
+}
+
+// Make modal functions global
+window.closeJsonModal = closeJsonModal;
+window.loadJsonFromModal = loadJsonFromModal;
+
+// ═══════════════════════════════════════════════════════════════
+// PNG EXPORT
+// ═══════════════════════════════════════════════════════════════
+
+function exportPng() {
+  const nodes = Object.values(store.nodes);
+  if (!nodes.length) { alert('Nothing to export'); return; }
+
+  const margin = 40;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.width);
+    maxY = Math.max(maxY, n.y + n.height);
+  }
+  const w = (maxX - minX) + margin * 2;
+  const h = (maxY - minY) + margin * 2;
+
+  // Clone SVG
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute('width', w);
+  clone.setAttribute('height', h);
+  clone.setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+  const vp = clone.querySelector('#viewport');
+  vp.setAttribute('transform', `translate(${-minX + margin},${-minY + margin})`);
+
+  // Remove grid
+  const grid = clone.querySelector('#grid-rect');
+  if (grid) grid.remove();
+
+  // Remove selection artifacts
+  const selLayer = clone.querySelector('#layer-selection');
+  if (selLayer) selLayer.innerHTML = '';
+  const prevLayer = clone.querySelector('#layer-drag-preview');
+  if (prevLayer) prevLayer.innerHTML = '';
+
+  // Add background
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('width', w);
+  bg.setAttribute('height', h);
+  bg.setAttribute('fill', '#1e1e1e');
+  clone.insertBefore(bg, clone.firstChild);
+
+  // Inline critical styles
+  const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+  styleEl.textContent = `
+    .node-port { opacity: 0; }
+    .connection-line { fill: none; stroke-width: 2; }
+    .connection-hit { display: none; }
+    .node-text { font-family: system-ui, sans-serif; }
+    .connection-label { font-family: system-ui, sans-serif; font-size: 12px; }
+  `;
+  clone.insertBefore(styleEl, clone.firstChild);
+
+  const serializer = new XMLSerializer();
+  const svgStr = serializer.serializeToString(clone);
+  const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    const scale = 2; // retina
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, w, h);
+    canvas.toBlob((pngBlob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(pngBlob);
+      a.download = 'logic-flow.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, 'image/png');
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-LAYOUT (Sugiyama-style)
+// ═══════════════════════════════════════════════════════════════
+
+function autoLayout() {
+  const nodes = Object.values(store.nodes);
+  const conns = Object.values(store.connections);
+  if (!nodes.length) return;
+
+  // Build adjacency
+  const adj = {};
+  const inDeg = {};
+  for (const n of nodes) { adj[n.id] = []; inDeg[n.id] = 0; }
+  for (const c of conns) {
+    if (adj[c.from] && store.nodes[c.to]) {
+      adj[c.from].push(c.to);
+      inDeg[c.to] = (inDeg[c.to] || 0) + 1;
+    }
+  }
+
+  // Layer assignment (BFS from roots)
+  const layers = {};
+  const roots = nodes.filter(n => !inDeg[n.id]).map(n => n.id);
+  if (roots.length === 0) roots.push(nodes[0].id); // fallback
+
+  const visited = new Set();
+  let queue = roots.map(id => ({ id, layer: 0 }));
+  while (queue.length) {
+    const next = [];
+    for (const { id, layer } of queue) {
+      if (visited.has(id)) continue;
+      visited.add(id);
+      layers[id] = Math.max(layers[id] || 0, layer);
+      for (const child of (adj[id] || [])) {
+        if (!visited.has(child)) {
+          next.push({ id: child, layer: layer + 1 });
+        }
+      }
+    }
+    queue = next;
+  }
+  // Assign unvisited
+  for (const n of nodes) {
+    if (!visited.has(n.id)) layers[n.id] = 0;
+  }
+
+  // Group by layer
+  const layerGroups = {};
+  for (const [id, layer] of Object.entries(layers)) {
+    if (!layerGroups[layer]) layerGroups[layer] = [];
+    layerGroups[layer].push(id);
+  }
+
+  // Barycenter ordering (2 passes)
+  const layerKeys = Object.keys(layerGroups).map(Number).sort((a, b) => a - b);
+  for (let pass = 0; pass < 3; pass++) {
+    for (let li = 1; li < layerKeys.length; li++) {
+      const layer = layerGroups[layerKeys[li]];
+      const prevLayer = layerGroups[layerKeys[li - 1]];
+      const prevIndex = {};
+      prevLayer.forEach((id, i) => prevIndex[id] = i);
+
+      layer.sort((a, b) => {
+        const parentsA = conns.filter(c => c.to === a && prevIndex[c.from] !== undefined).map(c => prevIndex[c.from]);
+        const parentsB = conns.filter(c => c.to === b && prevIndex[c.from] !== undefined).map(c => prevIndex[c.from]);
+        const bcA = parentsA.length ? parentsA.reduce((s, v) => s + v, 0) / parentsA.length : 0;
+        const bcB = parentsB.length ? parentsB.reduce((s, v) => s + v, 0) / parentsB.length : 0;
+        return bcA - bcB;
+      });
+    }
+  }
+
+  // Compute positions
+  const hSpacing = 200;
+  const vSpacing = 150;
+  const targetPositions = {};
+
+  for (let li = 0; li < layerKeys.length; li++) {
+    const layer = layerGroups[layerKeys[li]];
+    const totalWidth = layer.reduce((s, id) => s + store.nodes[id].width, 0) + (layer.length - 1) * hSpacing;
+    let startX = -totalWidth / 2;
+    for (const id of layer) {
+      const n = store.nodes[id];
+      targetPositions[id] = {
+        x: snapTo(startX, store.gridSize),
+        y: snapTo(li * vSpacing, store.gridSize)
+      };
+      startX += n.width + hSpacing;
+    }
+  }
+
+  // Animate
+  const origPositions = {};
+  for (const id of Object.keys(targetPositions)) {
+    origPositions[id] = { x: store.nodes[id].x, y: store.nodes[id].y };
+  }
+
+  pushUndo();
+  const duration = 300;
+  const start = performance.now();
+  function animStep(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const moves = [];
+    for (const [id, target] of Object.entries(targetPositions)) {
+      moves.push({
+        id,
+        x: lerp(origPositions[id].x, target.x, ease),
+        y: lerp(origPositions[id].y, target.y, ease)
+      });
+    }
+    dispatch('MOVE_NODES', { moves });
+    if (t < 1) requestAnimationFrame(animStep);
+    else {
+      // Update connection ports
+      for (const c of conns) {
+        const fromNode = store.nodes[c.from];
+        const toNode = store.nodes[c.to];
+        if (fromNode && toNode) {
+          const fromLayer = layers[c.from] || 0;
+          const toLayer = layers[c.to] || 0;
+          if (toLayer > fromLayer) {
+            c.fromPort = 'bottom';
+            c.toPort = 'top';
+          } else if (toLayer < fromLayer) {
+            c.fromPort = 'top';
+            c.toPort = 'bottom';
+          }
+        }
+      }
+      render();
+      setTimeout(fitAll, 50);
+    }
+  }
+  requestAnimationFrame(animStep);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MINIMAP
+// ═══════════════════════════════════════════════════════════════
+
+let minimapTimer = null;
+const minimapCanvas = $('#minimap-canvas');
+const minimapCtx = minimapCanvas.getContext('2d');
+
+function scheduleMinimap() {
+  if (minimapTimer) clearTimeout(minimapTimer);
+  minimapTimer = setTimeout(renderMinimap, 100);
+}
+
+function renderMinimap() {
+  const nodes = Object.values(store.nodes);
+  const conns = Object.values(store.connections);
+  const cw = minimapCanvas.width;
+  const ch = minimapCanvas.height;
+  minimapCtx.clearRect(0, 0, cw, ch);
+  minimapCtx.fillStyle = '#1a1a1a';
+  minimapCtx.fillRect(0, 0, cw, ch);
+
+  if (!nodes.length) return;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.width);
+    maxY = Math.max(maxY, n.y + n.height);
+  }
+
+  const margin = 20;
+  const dw = maxX - minX || 1;
+  const dh = maxY - minY || 1;
+  const scale = Math.min((cw - margin * 2) / dw, (ch - margin * 2) / dh);
+  const ox = (cw - dw * scale) / 2 - minX * scale;
+  const oy = (ch - dh * scale) / 2 - minY * scale;
+
+  // Draw connections
+  minimapCtx.strokeStyle = '#444';
+  minimapCtx.lineWidth = 1;
+  for (const c of conns) {
+    const fn = store.nodes[c.from];
+    const tn = store.nodes[c.to];
+    if (!fn || !tn) continue;
+    const p1 = getPortPos(fn, c.fromPort);
+    const p2 = getPortPos(tn, c.toPort);
+    minimapCtx.beginPath();
+    minimapCtx.moveTo(p1.x * scale + ox, p1.y * scale + oy);
+    minimapCtx.lineTo(p2.x * scale + ox, p2.y * scale + oy);
+    minimapCtx.stroke();
+  }
+
+  // Draw nodes
+  for (const n of nodes) {
+    minimapCtx.fillStyle = n.color;
+    minimapCtx.fillRect(n.x * scale + ox, n.y * scale + oy, n.width * scale, n.height * scale);
+  }
+
+  // Draw viewport rect
+  const svgRect = svgEl.getBoundingClientRect();
+  const vx = (-store.viewport.x / store.viewport.zoom);
+  const vy = (-store.viewport.y / store.viewport.zoom);
+  const vw = svgRect.width / store.viewport.zoom;
+  const vh = svgRect.height / store.viewport.zoom;
+
+  minimapCtx.strokeStyle = '#0078d4';
+  minimapCtx.lineWidth = 2;
+  minimapCtx.strokeRect(vx * scale + ox, vy * scale + oy, vw * scale, vh * scale);
+
+  // Store minimap transform for click handling
+  minimapCanvas._mmScale = scale;
+  minimapCanvas._mmOx = ox;
+  minimapCanvas._mmOy = oy;
+  minimapCanvas._mmMinX = minX;
+  minimapCanvas._mmMinY = minY;
+}
+
+// Minimap click to pan
+$('#minimap').addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  const rect = minimapCanvas.getBoundingClientRect();
+  const scaleX = minimapCanvas.width / rect.width;
+  const scaleY = minimapCanvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  const scale = minimapCanvas._mmScale || 1;
+  const ox = minimapCanvas._mmOx || 0;
+  const oy = minimapCanvas._mmOy || 0;
+  const canvasX = (mx - ox) / scale;
+  const canvasY = (my - oy) / scale;
+  const svgRect = svgEl.getBoundingClientRect();
+  const newVpX = svgRect.width / 2 - canvasX * store.viewport.zoom;
+  const newVpY = svgRect.height / 2 - canvasY * store.viewport.zoom;
+  dispatch('SET_VIEWPORT', { x: newVpX, y: newVpY });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PANEL TOGGLE
+// ═══════════════════════════════════════════════════════════════
+
+$('#panel-toggle').addEventListener('click', () => {
+  const panel = $('#properties-panel');
+  panel.classList.toggle('collapsed');
+  const toggle = $('#panel-toggle');
+  toggle.innerHTML = panel.classList.contains('collapsed') ? '&#9664;' : '&#9654;';
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO DIAGRAM
+// ═══════════════════════════════════════════════════════════════
+
+function loadDemo() {
+  const demo = {
+    version: 1,
+    nodes: [
+      { id: 'n1', type: 'startend', x: 200, y: 40, width: 140, height: 60, text: 'Start', color: '#2d7d46', textColor: '#ffffff', fontSize: 14 },
+      { id: 'n2', type: 'io', x: 180, y: 160, width: 180, height: 70, text: 'Read Input', color: '#8a5d3b', textColor: '#ffffff', fontSize: 14 },
+      { id: 'n3', type: 'decision', x: 190, y: 300, width: 160, height: 120, text: 'Valid?', color: '#6a4c93', textColor: '#ffffff', fontSize: 14 },
+      { id: 'n4', type: 'process', x: 190, y: 500, width: 160, height: 70, text: 'Process Data', color: '#264f78', textColor: '#ffffff', fontSize: 14 },
+      { id: 'n5', type: 'startend', x: 200, y: 640, width: 140, height: 60, text: 'End', color: '#2d7d46', textColor: '#ffffff', fontSize: 14 },
+      { id: 'n6', type: 'process', x: 460, y: 320, width: 160, height: 70, text: 'Show Error', color: '#a03030', textColor: '#ffffff', fontSize: 14 },
+    ],
+    connections: [
+      { id: 'c1', from: 'n1', fromPort: 'bottom', to: 'n2', toPort: 'top', label: '', color: '#569cd6', lineStyle: 'solid' },
+      { id: 'c2', from: 'n2', fromPort: 'bottom', to: 'n3', toPort: 'top', label: '', color: '#569cd6', lineStyle: 'solid' },
+      { id: 'c3', from: 'n3', fromPort: 'bottom', to: 'n4', toPort: 'top', label: 'Yes', color: '#4ec970', lineStyle: 'solid' },
+      { id: 'c4', from: 'n4', fromPort: 'bottom', to: 'n5', toPort: 'top', label: '', color: '#569cd6', lineStyle: 'solid' },
+      { id: 'c5', from: 'n3', fromPort: 'right', to: 'n6', toPort: 'left', label: 'No', color: '#d64545', lineStyle: 'solid' },
+      { id: 'c6', from: 'n6', fromPort: 'top', to: 'n2', toPort: 'right', label: '', color: '#d64545', lineStyle: 'dashed' },
+    ]
+  };
+  dispatch('IMPORT_STATE', demo);
+  setTimeout(fitAll, 100);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LIVE RELOAD — polls logic-flow-data.json for changes from Claude
+// ═══════════════════════════════════════════════════════════════
+
+let liveReloadHash = null;
+let liveReloadInterval = null;
+let liveReloadEnabled = true;
+
+async function checkForDataFile() {
+  const statusEl = document.getElementById('status-live');
+  try {
+    const resp = await fetch('logic-flow-data.json?t=' + Date.now());
+    if (!resp.ok) {
+      if (statusEl) statusEl.textContent = '';
+      return false;
+    }
+    const text = await resp.text();
+    const hash = simpleHash(text);
+    if (hash !== liveReloadHash) {
+      liveReloadHash = hash;
+      try {
+        const data = JSON.parse(text);
+        if (data && data.nodes) {
+          dispatch('IMPORT_STATE', data);
+          setTimeout(fitAll, 50);
+          if (statusEl) {
+            statusEl.textContent = 'Live loaded';
+            statusEl.style.color = '#4ec970';
+            setTimeout(() => {
+              statusEl.textContent = 'Watching...';
+              statusEl.style.color = '#888';
+            }, 2000);
+          }
+          return true;
+        }
+      } catch (e) {
+        console.warn('Live reload: invalid JSON', e);
+      }
+    } else {
+      if (statusEl) {
+        statusEl.textContent = 'Watching...';
+        statusEl.style.color = '#888';
+      }
+    }
+  } catch (e) {
+    // File not found or CORS — normal when no data file exists
+    if (statusEl) statusEl.textContent = '';
+  }
+  return false;
+}
+
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + ch;
+    hash |= 0;
+  }
+  return hash;
+}
+
+function startLiveReload() {
+  if (liveReloadInterval) clearInterval(liveReloadInterval);
+  liveReloadInterval = setInterval(() => {
+    if (liveReloadEnabled) checkForDataFile();
+  }, 2000);
+}
+
+function stopLiveReload() {
+  if (liveReloadInterval) {
+    clearInterval(liveReloadInterval);
+    liveReloadInterval = null;
+  }
+  const statusEl = document.getElementById('status-live');
+  if (statusEl) statusEl.textContent = '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+
+async function init() {
+  // Center viewport
+  const rect = svgEl.getBoundingClientRect();
+  store.viewport.x = rect.width / 2;
+  store.viewport.y = rect.height / 2;
+  render();
+
+  // Try loading live data file first, fall back to demo
+  const loaded = await checkForDataFile();
+  if (!loaded) loadDemo();
+
+  // Start polling for changes
+  startLiveReload();
+}
+
+window.addEventListener('DOMContentLoaded', init);
+// resize handled below with debounce
+
+// ═══════════════════════════════════════════════════════════════
+// IMPROVED HIT TESTING — Diamond & Parallelogram shapes
+// ═══════════════════════════════════════════════════════════════
+
+function pointInDiamond(px, py, node) {
+  const cx = node.x + node.width / 2;
+  const cy = node.y + node.height / 2;
+  const hw = node.width / 2;
+  const hh = node.height / 2;
+  // Diamond: |px-cx|/hw + |py-cy|/hh <= 1
+  return (Math.abs(px - cx) / hw + Math.abs(py - cy) / hh) <= 1.05;
+}
+
+function pointInParallelogram(px, py, node) {
+  const { x, y, width: w, height: h } = node;
+  const skew = w * 0.15;
+  // Top edge from (x+skew, y) to (x+w, y)
+  // Bottom edge from (x, y+h) to (x+w-skew, y+h)
+  // Approximate with bounding box + slope check
+  if (py < y || py > y + h || px < x || px > x + w) return false;
+  const t = (py - y) / h; // 0 at top, 1 at bottom
+  const leftEdge = x + skew * (1 - t);
+  const rightEdge = x + w - skew * t;
+  return px >= leftEdge && px <= rightEdge;
+}
+
+// Override the basic hitTestNode for shape-aware testing
+const _origHitTestNode = hitTestNode;
+hitTestNode = function(cx, cy) {
+  const nodes = Object.values(store.nodes);
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    // Quick bounding box reject
+    if (cx < n.x - 5 || cx > n.x + n.width + 5 || cy < n.y - 5 || cy > n.y + n.height + 5) continue;
+    switch (n.type) {
+      case 'decision':
+        if (pointInDiamond(cx, cy, n)) return n;
+        break;
+      case 'io':
+        if (pointInParallelogram(cx, cy, n)) return n;
+        break;
+      default:
+        if (cx >= n.x && cx <= n.x + n.width && cy >= n.y && cy <= n.y + n.height) return n;
+    }
+  }
+  return null;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SMOOTH CONNECTION PATHS — Rounded corners
+// ═══════════════════════════════════════════════════════════════
+
+function pointsToSmoothPath(points) {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  }
+
+  const radius = 12;
+  let d = `M ${points[0].x} ${points[0].y}`;
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+
+    // Vector from curr to prev and curr to next
+    const dx1 = prev.x - curr.x, dy1 = prev.y - curr.y;
+    const dx2 = next.x - curr.x, dy2 = next.y - curr.y;
+    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+
+    if (len1 === 0 || len2 === 0) {
+      d += ` L ${curr.x} ${curr.y}`;
+      continue;
+    }
+
+    const r = Math.min(radius, len1 / 2, len2 / 2);
+    const startX = curr.x + (dx1 / len1) * r;
+    const startY = curr.y + (dy1 / len1) * r;
+    const endX = curr.x + (dx2 / len2) * r;
+    const endY = curr.y + (dy2 / len2) * r;
+
+    d += ` L ${startX} ${startY}`;
+    d += ` Q ${curr.x} ${curr.y} ${endX} ${endY}`;
+  }
+
+  d += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
+  return d;
+}
+
+// Patch renderConnections to use smooth paths
+const _origRenderConnections = renderConnections;
+renderConnections = function() {
+  layerConnections.innerHTML = '';
+  const selected = new Set(store.selectedIds);
+
+  for (const conn of Object.values(store.connections)) {
+    const fromNode = store.nodes[conn.from];
+    const toNode = store.nodes[conn.to];
+    if (!fromNode || !toNode) continue;
+
+    const points = routeConnection(fromNode, conn.fromPort, toNode, conn.toPort);
+    const d = pointsToSmoothPath(points);
+    const isSel = selected.has(conn.id);
+    const color = isSel ? '#0078d4' : (conn.color || '#569cd6');
+
+    const g = createSVGElement('g', { 'data-conn-id': conn.id });
+
+    // Hit area
+    const hit = createSVGElement('path', {
+      d, class: 'connection-hit', 'data-conn-id': conn.id,
+    });
+    g.appendChild(hit);
+
+    // Dynamic arrowhead marker
+    const markerId = isSel ? 'arrowhead-selected' : ('arrow-' + conn.id);
+    if (!isSel) {
+      const marker = createSVGElement('marker', {
+        id: markerId, markerWidth: 10, markerHeight: 7,
+        refX: 9, refY: 3.5, orient: 'auto', markerUnits: 'strokeWidth'
+      });
+      const poly = createSVGElement('polygon', {
+        points: '0 0, 10 3.5, 0 7', fill: color
+      });
+      marker.appendChild(poly);
+      g.appendChild(marker);
+    }
+
+    // Visible line
+    const line = createSVGElement('path', {
+      d, class: 'connection-line',
+      stroke: color,
+      'stroke-dasharray': conn.lineStyle === 'dashed' ? '8 4' : 'none',
+      'marker-end': `url(#${markerId})`,
+      'data-conn-id': conn.id,
+    });
+    if (isSel) line.setAttribute('stroke-width', '3');
+    g.appendChild(line);
+
+    // Label
+    if (conn.label) {
+      const midIdx = Math.floor(points.length / 2);
+      const midPrev = points[midIdx - 1] || points[0];
+      const midCurr = points[midIdx] || points[points.length - 1];
+      const mid = {
+        x: (midPrev.x + midCurr.x) / 2,
+        y: (midPrev.y + midCurr.y) / 2
+      };
+      const tw = measureTextWidth(conn.label, 12) + 10;
+      const bg = createSVGElement('rect', {
+        x: mid.x - tw / 2, y: mid.y - 10,
+        width: tw, height: 20, rx: 4,
+        fill: '#1e1e1e', 'fill-opacity': 0.9,
+        'pointer-events': 'none'
+      });
+      g.appendChild(bg);
+      const label = createSVGElement('text', {
+        x: mid.x, y: mid.y + 4,
+        'text-anchor': 'middle',
+        class: 'connection-label',
+        fill: color,
+      });
+      label.textContent = conn.label;
+      g.appendChild(label);
+    }
+
+    layerConnections.appendChild(g);
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DRAG MINIMAP — continuous pan while dragging on minimap
+// ═══════════════════════════════════════════════════════════════
+
+(function() {
+  const mm = $('#minimap');
+  let mmDragging = false;
+
+  function mmPanTo(e) {
+    const rect = minimapCanvas.getBoundingClientRect();
+    const scaleX = minimapCanvas.width / rect.width;
+    const scaleY = minimapCanvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    const scale = minimapCanvas._mmScale || 1;
+    const ox = minimapCanvas._mmOx || 0;
+    const oy = minimapCanvas._mmOy || 0;
+    const canvasX = (mx - ox) / scale;
+    const canvasY = (my - oy) / scale;
+    const svgRect = svgEl.getBoundingClientRect();
+    const newVpX = svgRect.width / 2 - canvasX * store.viewport.zoom;
+    const newVpY = svgRect.height / 2 - canvasY * store.viewport.zoom;
+    dispatch('SET_VIEWPORT', { x: newVpX, y: newVpY });
+  }
+
+  mm.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    mmDragging = true;
+    mm.setPointerCapture(e.pointerId);
+    mmPanTo(e);
+  });
+  mm.addEventListener('pointermove', (e) => {
+    if (mmDragging) { e.stopPropagation(); mmPanTo(e); }
+  });
+  mm.addEventListener('pointerup', (e) => {
+    if (mmDragging) {
+      mmDragging = false;
+      mm.releasePointerCapture(e.pointerId);
+      e.stopPropagation();
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// NODE HOVER TOOLTIP
+// ═══════════════════════════════════════════════════════════════
+
+(function() {
+  let tooltipEl = document.createElement('div');
+  tooltipEl.style.cssText = `
+    position: fixed; display: none; background: #1a1a1a; color: #ccc;
+    border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 8px;
+    font-size: 11px; pointer-events: none; z-index: 300;
+    max-width: 200px; word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  `;
+  document.body.appendChild(tooltipEl);
+  let tooltipTimeout = null;
+
+  container.addEventListener('pointermove', (e) => {
+    // Only show tooltip in select mode, not during drags
+    if (store.mode !== 'select' || dragState || marqueeState || panState) {
+      tooltipEl.style.display = 'none';
+      return;
+    }
+
+    const nodeGroup = e.target.closest('.node-group');
+    if (nodeGroup && !dragState) {
+      const nodeId = nodeGroup.dataset.nodeId;
+      const node = store.nodes[nodeId];
+      if (node && node.text) {
+        clearTimeout(tooltipTimeout);
+        tooltipTimeout = setTimeout(() => {
+          const types = { process: 'Process', decision: 'Decision', startend: 'Start/End', io: 'I/O', comment: 'Comment' };
+          tooltipEl.innerHTML = `<b>${types[node.type]}</b>: ${escHtml(node.text)}`;
+          tooltipEl.style.left = (e.clientX + 12) + 'px';
+          tooltipEl.style.top = (e.clientY + 12) + 'px';
+          tooltipEl.style.display = 'block';
+        }, 600);
+      }
+    } else {
+      clearTimeout(tooltipTimeout);
+      tooltipEl.style.display = 'none';
+    }
+  });
+
+  container.addEventListener('pointerleave', () => {
+    clearTimeout(tooltipTimeout);
+    tooltipEl.style.display = 'none';
+  });
+
+  container.addEventListener('pointerdown', () => {
+    clearTimeout(tooltipTimeout);
+    tooltipEl.style.display = 'none';
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// SELECTION HIGHLIGHT ANIMATION
+// ═══════════════════════════════════════════════════════════════
+
+(function() {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes marchingAnts {
+      0% { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -16; }
+    }
+    #layer-selection rect {
+      animation: marchingAnts 0.5s linear infinite;
+    }
+    .selection-marquee {
+      animation: marchingAnts 0.3s linear infinite;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// DROP SHADOW FOR NODES — SVG filter
+// ═══════════════════════════════════════════════════════════════
+
+(function() {
+  const defs = svgEl.querySelector('defs');
+  const filter = createSVGElement('filter', {
+    id: 'drop-shadow', x: '-10%', y: '-10%', width: '130%', height: '130%'
+  });
+  const feOffset = createSVGElement('feOffset', { in: 'SourceAlpha', dx: 2, dy: 3, result: 'offsetAlpha' });
+  const feGaussian = createSVGElement('feGaussianBlur', { in: 'offsetAlpha', stdDeviation: 3, result: 'blur' });
+  const feFlood = createSVGElement('feFlood', { 'flood-color': '#000000', 'flood-opacity': 0.35, result: 'color' });
+  const feComposite = createSVGElement('feComposite', { in: 'color', in2: 'blur', operator: 'in', result: 'shadow' });
+  const feMerge = createSVGElement('feMerge');
+  feMerge.appendChild(createSVGElement('feMergeNode', { in: 'shadow' }));
+  feMerge.appendChild(createSVGElement('feMergeNode', { in: 'SourceGraphic' }));
+  filter.appendChild(feOffset);
+  filter.appendChild(feGaussian);
+  filter.appendChild(feFlood);
+  filter.appendChild(feComposite);
+  filter.appendChild(feMerge);
+  defs.appendChild(filter);
+
+  // Apply filter to node layer
+  const style2 = document.createElement('style');
+  style2.textContent = `
+    .node-group { filter: url(#drop-shadow); }
+    .node-group:hover .node-shape { filter: brightness(1.12); }
+  `;
+  document.head.appendChild(style2);
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUT HELP OVERLAY
+// ═══════════════════════════════════════════════════════════════
+
+(function() {
+  const helpOverlay = document.createElement('div');
+  helpOverlay.id = 'help-overlay';
+  helpOverlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center; z-index: 3000;
+  `;
+  helpOverlay.innerHTML = `
+    <div style="background:#252526;border:1px solid #3c3c3c;border-radius:10px;padding:24px 32px;max-width:520px;color:#ccc;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="margin-bottom:16px;color:#e0e0e0;font-size:16px;">Keyboard Shortcuts</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:12px;">
+        <span style="color:#888">V</span><span>Select tool</span>
+        <span style="color:#888">C</span><span>Connect tool</span>
+        <span style="color:#888">G</span><span>Toggle grid snap</span>
+        <span style="color:#888">Delete</span><span>Delete selected</span>
+        <span style="color:#888">Ctrl+Z</span><span>Undo</span>
+        <span style="color:#888">Ctrl+Y</span><span>Redo</span>
+        <span style="color:#888">Ctrl+A</span><span>Select all</span>
+        <span style="color:#888">Ctrl+C</span><span>Copy</span>
+        <span style="color:#888">Ctrl+V</span><span>Paste</span>
+        <span style="color:#888">Ctrl+D</span><span>Duplicate</span>
+        <span style="color:#888">Space+Drag</span><span>Pan canvas</span>
+        <span style="color:#888">Mouse Wheel</span><span>Zoom</span>
+        <span style="color:#888">Middle Click</span><span>Pan canvas</span>
+        <span style="color:#888">Double Click</span><span>Edit node text</span>
+        <span style="color:#888">Arrow Keys</span><span>Nudge selection</span>
+        <span style="color:#888">Escape</span><span>Deselect / cancel</span>
+        <span style="color:#888">?</span><span>This help</span>
+      </div>
+      <p style="margin-top:16px;font-size:11px;color:#666;text-align:center;">Press Escape or click to close</p>
+    </div>
+  `;
+  document.body.appendChild(helpOverlay);
+
+  helpOverlay.addEventListener('click', () => { helpOverlay.style.display = 'none'; });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+      e.preventDefault();
+      helpOverlay.style.display = helpOverlay.style.display === 'flex' ? 'none' : 'flex';
+    }
+    if (e.key === 'Escape' && helpOverlay.style.display === 'flex') {
+      helpOverlay.style.display = 'none';
+      e.stopPropagation();
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// TOUCH / TRACKPAD PINCH-TO-ZOOM SUPPORT
+// ═══════════════════════════════════════════════════════════════
+
+container.addEventListener('gesturestart', (e) => e.preventDefault());
+container.addEventListener('gesturechange', (e) => e.preventDefault());
+
+// ═══════════════════════════════════════════════════════════════
+// PREVENT ACCIDENTAL NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+
+window.addEventListener('beforeunload', (e) => {
+  if (Object.keys(store.nodes).length > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// NODE COUNT BADGE ON STATUS BAR UPDATES
+// ═══════════════════════════════════════════════════════════════
+
+// Title update with node count
+const _origUpdateStatusBar = updateStatusBar;
+updateStatusBar = function() {
+  _origUpdateStatusBar();
+  const nc = Object.keys(store.nodes).length;
+  document.title = nc > 0 ? `Logic Flow Editor (${nc} nodes)` : 'Logic Flow Editor';
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SNAP INDICATOR LINES (show alignment guides)
+// ═══════════════════════════════════════════════════════════════
+
+function getSnapGuides(movingIds, testX, testY, testW, testH) {
+  const guides = [];
+  const threshold = 5;
+  const movingSet = new Set(movingIds);
+
+  const mCx = testX + testW / 2;
+  const mCy = testY + testH / 2;
+  const mRight = testX + testW;
+  const mBottom = testY + testH;
+
+  for (const n of Object.values(store.nodes)) {
+    if (movingSet.has(n.id)) continue;
+    const nCx = n.x + n.width / 2;
+    const nCy = n.y + n.height / 2;
+    const nRight = n.x + n.width;
+    const nBottom = n.y + n.height;
+
+    // Vertical alignment guides
+    if (Math.abs(testX - n.x) < threshold) guides.push({ type: 'v', x: n.x });
+    if (Math.abs(mCx - nCx) < threshold) guides.push({ type: 'v', x: nCx });
+    if (Math.abs(mRight - nRight) < threshold) guides.push({ type: 'v', x: nRight });
+    if (Math.abs(testX - nRight) < threshold) guides.push({ type: 'v', x: nRight });
+    if (Math.abs(mRight - n.x) < threshold) guides.push({ type: 'v', x: n.x });
+
+    // Horizontal alignment guides
+    if (Math.abs(testY - n.y) < threshold) guides.push({ type: 'h', y: n.y });
+    if (Math.abs(mCy - nCy) < threshold) guides.push({ type: 'h', y: nCy });
+    if (Math.abs(mBottom - nBottom) < threshold) guides.push({ type: 'h', y: nBottom });
+    if (Math.abs(testY - nBottom) < threshold) guides.push({ type: 'h', y: nBottom });
+    if (Math.abs(mBottom - n.y) < threshold) guides.push({ type: 'h', y: n.y });
+  }
+  return guides;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMPROVED PORT RENDERING — glowing effect on hover
+// ═══════════════════════════════════════════════════════════════
+
+(function() {
+  const style3 = document.createElement('style');
+  style3.textContent = `
+    .node-port {
+      transition: opacity 0.15s, r 0.15s, filter 0.15s;
+    }
+    .node-port:hover {
+      r: 8;
+      filter: drop-shadow(0 0 4px #0078d4);
+      opacity: 1 !important;
+    }
+    .node-group.selected .node-shape {
+      stroke: #0078d4 !important;
+      stroke-opacity: 0.6;
+    }
+  `;
+  document.head.appendChild(style3);
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// WINDOW RESIZE HANDLER — debounced
+// ═══════════════════════════════════════════════════════════════
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => render(), 50);
+});
+
+</script>
+</body>
+</html>
