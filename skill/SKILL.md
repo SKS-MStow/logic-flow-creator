@@ -9,7 +9,7 @@ You generate flow diagrams by writing JSON directly to a data file that the Logi
 
 ## How It Works — Bidirectional Sync
 
-The editor and Claude share `C:/Users/localadmin/logic-flow-data.json` as a live data file:
+The editor and Claude share `C:/Users/Mark/Documents/logic-flow-data.json` as a live data file:
 
 - **Claude → Editor**: You write the JSON file, the editor polls every 2s and auto-loads changes
 - **Editor → Claude**: User edits in the browser auto-save back to the same JSON file via the server
@@ -20,7 +20,7 @@ This means the user never needs to manually save, export, or copy-paste anything
 
 1. **Ensure the server is running** (see Step 0)
 2. User describes what they want diagrammed
-3. You generate the JSON and **write it directly** to `C:/Users/localadmin/logic-flow-data.json` using the Write tool
+3. You generate the JSON and **write it directly** to `C:/Users/Mark/Documents/logic-flow-data.json` using the Write tool
 4. The editor auto-loads it within 2 seconds
 5. User edits the diagram visually (moves nodes, adds connections, edits text, etc.)
 6. Their changes auto-save back to `logic-flow-data.json` (500ms debounce)
@@ -28,7 +28,7 @@ This means the user never needs to manually save, export, or copy-paste anything
 
 **Important**: Always use the Write tool to write the JSON file. Never output JSON for the user to copy-paste.
 
-**Critical**: When iterating on an existing diagram, ALWAYS read `C:/Users/localadmin/logic-flow-data.json` first to pick up the user's edits. Never assume the file is the same as what you last wrote — the user may have moved nodes, changed text, added connections, etc.
+**Critical**: When iterating on an existing diagram, ALWAYS read `C:/Users/Mark/Documents/logic-flow-data.json` first to pick up the user's edits. Never assume the file is the same as what you last wrote — the user may have moved nodes, changed text, added connections, etc.
 
 ## Step 0: Start the Local Server
 
@@ -42,7 +42,7 @@ curl -s http://localhost:8000/logic-flow-editor.html > /dev/null 2>&1 && echo "R
 If NOT RUNNING, start it in the background:
 
 ```bash
-cd /c/Users/localadmin && python logic-flow-server.py
+cd /c/Users/Mark/Documents && python logic-flow-server.py
 ```
 
 Run this with `run_in_background: true` so it doesn't block. The server auto-opens the editor in the browser.
@@ -51,14 +51,14 @@ If the server is already running, skip straight to generating the diagram.
 
 ## Flow Sessions
 
-Each diagram is a named "flow" stored in `C:/Users/localadmin/logic-flows/<name>.json`. This means multiple diagrams can coexist without overwriting each other.
+Each diagram is a named "flow" stored in `C:/Users/Mark/Documents/logic-flows/<name>.json`. This means multiple diagrams can coexist without overwriting each other.
 
 ### Creating a new flow
 
 When the user asks for a new diagram, pick a short descriptive kebab-case name (e.g., `afp-touchpanel`, `auth-flow`, `order-processing`). Write the JSON to:
 
 ```
-C:/Users/localadmin/logic-flows/<name>.json
+C:/Users/Mark/Documents/logic-flows/<name>.json
 ```
 
 Then tell the user to open (or it will auto-open):
@@ -70,7 +70,7 @@ http://localhost:8000/logic-flow-editor.html?flow=<name>
 
 When the user asks to modify a diagram, read the flow file first:
 ```
-C:/Users/localadmin/logic-flows/<name>.json
+C:/Users/Mark/Documents/logic-flows/<name>.json
 ```
 This will include any edits the user made in the browser (they auto-save). Modify and write it back.
 
@@ -128,6 +128,8 @@ Tell the user:
 | `decision` | Diamond | `#6a4c93` | Yes/No questions, conditionals, branching |
 | `io` | Parallelogram | `#8a5d3b` | Input, output, data, API calls, user interaction |
 | `comment` | Dashed rectangle | `#4a4a2a` | Notes, annotations, explanations |
+| `question` | Rounded rect + ? badge | `#0e7c7b` | Questions from Claude — use when asking the user something |
+| `answer` | Rounded rect + A badge + left accent | `#b85c1f` | User answers — drag in to respond to a question |
 
 Use custom colors when it helps readability — e.g., `#a03030` for error states, `#c8a820` for SIMPL/control signals, `#c43670` for feedback paths. Always keep `textColor: "#ffffff"` for readability on dark backgrounds (use `"#000000"` on light/yellow backgrounds).
 
@@ -169,6 +171,8 @@ Before finalizing the JSON, mentally check every node's bounding box (`x` to `x+
 - **Decision**: `width: 160, height: 120` (needs room for diamond)
 - **IO**: `width: 180, height: 70`
 - **Comment**: `width: 200, height: 60`
+- **Question**: `width: 200, height: 90`
+- **Answer**: `width: 200, height: 90`
 
 ### Decision Branching
 - Main/happy path goes **down** (`bottom` port), labeled `"Yes"` with color `"#4ec970"`
@@ -189,6 +193,15 @@ For larger flows with multiple branches:
 - Use consistent color coding across branches to show categories
 - Group related nodes by column — one column per interaction type
 - Use comment nodes sparingly for annotations
+
+## Question & Answer Blocks
+
+Use `question` and `answer` blocks for interactive back-and-forth within a diagram:
+
+- **Question** (`#0e7c7b` teal, ? badge): Use whenever you need to ask the user something in the flow — e.g., a design decision, a clarification, or a choice point. Default text: `"Question?"`
+- **Answer** (`#b85c1f` orange, A badge, left accent bar): The user drags this in from the toolbar to respond to a question. Default text: `"Answer"`
+
+Typical pattern: place a question block where the flow needs user input, connect it to the next step. The user can then add an answer block, type their response, and connect it.
 
 ## What NOT to Do
 

@@ -526,6 +526,14 @@ html, body {
         <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="2" y="4" width="14" height="10" rx="1" stroke-dasharray="3 2" fill="none"/></svg>
         <span>Comment</span>
       </button>
+      <button class="tb-btn tb-btn-wide" data-action="add-question" data-tooltip="Question Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="3" fill="none"/><text x="9" y="13" text-anchor="middle" font-size="10" font-weight="bold" fill="currentColor" stroke="none">?</text></svg>
+        <span>Question</span>
+      </button>
+      <button class="tb-btn tb-btn-wide" data-action="add-answer" data-tooltip="Answer Node">
+        <svg viewBox="0 0 18 18" fill="none" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="3" fill="none"/><text x="9" y="13" text-anchor="middle" font-size="10" font-weight="bold" fill="currentColor" stroke="none">A</text></svg>
+        <span>Answer</span>
+      </button>
     </div>
     <div class="toolbar-sep"></div>
     <!-- Tools -->
@@ -726,6 +734,8 @@ const NODE_DEFAULTS = {
   startend: { width: 160, height: 70,  color: '#2d7d46', textColor: '#ffffff', fontSize: 14 },
   io:       { width: 160, height: 80,  color: '#8a5d3b', textColor: '#ffffff', fontSize: 14 },
   comment:  { width: 180, height: 80,  color: '#4a4a2a', textColor: '#cccccc', fontSize: 13 },
+  question: { width: 200, height: 90,  color: '#0e7c7b', textColor: '#ffffff', fontSize: 14 },
+  answer:   { width: 200, height: 90,  color: '#b85c1f', textColor: '#ffffff', fontSize: 14 },
 };
 
 const store = {
@@ -1223,10 +1233,72 @@ function renderNodeShape(g, node) {
         'stroke-dasharray': '6 3'
       });
       break;
+    case 'question': {
+      // Rounded rect with ? badge
+      shape = createSVGElement('rect', {
+        x, y, width: w, height: h, rx: 12, ry: 12,
+        fill: color, stroke: '#4dd9d7', 'stroke-width': 2.5
+      });
+      shape.classList.add('node-shape');
+      shape.dataset.nodeId = node.id;
+      g.appendChild(shape);
+      // ? badge circle
+      const qBadge = createSVGElement('circle', {
+        cx: x + w - 6, cy: y + 6, r: 10,
+        fill: '#4dd9d7', stroke: 'none', 'pointer-events': 'none'
+      });
+      g.appendChild(qBadge);
+      const qMark = createSVGElement('text', {
+        x: x + w - 6, y: y + 11,
+        'text-anchor': 'middle', fill: '#0e7c7b',
+        'font-size': 14, 'font-weight': 'bold',
+        'font-family': 'system-ui, sans-serif',
+        'pointer-events': 'none'
+      });
+      qMark.textContent = '?';
+      g.appendChild(qMark);
+      shape = null; // already appended with class/dataset
+      break;
+    }
+    case 'answer': {
+      // Rounded rect with thick left accent bar
+      shape = createSVGElement('rect', {
+        x, y, width: w, height: h, rx: 12, ry: 12,
+        fill: color, stroke: '#f0a050', 'stroke-width': 2.5
+      });
+      shape.classList.add('node-shape');
+      shape.dataset.nodeId = node.id;
+      g.appendChild(shape);
+      // Left accent bar
+      const bar = createSVGElement('rect', {
+        x: x + 1, y: y + 8, width: 5, height: h - 16, rx: 2,
+        fill: '#f0a050', stroke: 'none', 'pointer-events': 'none'
+      });
+      g.appendChild(bar);
+      // A badge circle
+      const aBadge = createSVGElement('circle', {
+        cx: x + w - 6, cy: y + 6, r: 10,
+        fill: '#f0a050', stroke: 'none', 'pointer-events': 'none'
+      });
+      g.appendChild(aBadge);
+      const aMark = createSVGElement('text', {
+        x: x + w - 6, y: y + 11,
+        'text-anchor': 'middle', fill: '#b85c1f',
+        'font-size': 14, 'font-weight': 'bold',
+        'font-family': 'system-ui, sans-serif',
+        'pointer-events': 'none'
+      });
+      aMark.textContent = 'A';
+      g.appendChild(aMark);
+      shape = null; // already appended with class/dataset
+      break;
+    }
   }
-  shape.classList.add('node-shape');
-  shape.dataset.nodeId = node.id;
-  g.appendChild(shape);
+  if (shape) {
+    shape.classList.add('node-shape');
+    shape.dataset.nodeId = node.id;
+    g.appendChild(shape);
+  }
 }
 
 function renderNodeText(g, node) {
@@ -1467,7 +1539,7 @@ function updatePropertiesPanel() {
 }
 
 function renderNodeProps(panel, node) {
-  const types = { process: 'Process', decision: 'Decision', startend: 'Start/End', io: 'I/O', comment: 'Comment' };
+  const types = { process: 'Process', decision: 'Decision', startend: 'Start/End', io: 'I/O', comment: 'Comment', question: 'Question', answer: 'Answer' };
   panel.innerHTML = `
     <div class="panel-section">
       <h4>${types[node.type] || node.type} Node</h4>
@@ -1794,7 +1866,7 @@ function onPointerDown(e) {
     dispatch('ADD_NODE', {
       id, type: store.placeType,
       x: nx, y: ny, width: defs.width, height: defs.height,
-      text: store.placeType === 'startend' ? 'Start' : store.placeType === 'comment' ? 'Note' : 'Process',
+      text: store.placeType === 'startend' ? 'Start' : store.placeType === 'comment' ? 'Note' : store.placeType === 'question' ? 'Question?' : store.placeType === 'answer' ? 'Answer' : 'Process',
       color: defs.color, textColor: defs.textColor, fontSize: defs.fontSize
     });
     dispatch('SET_SELECTION', [id]);
@@ -2179,6 +2251,8 @@ function onContextMenu(e) {
       { label: 'Add Start/End', action: () => addNodeAt('startend', canvas.x, canvas.y) },
       { label: 'Add I/O', action: () => addNodeAt('io', canvas.x, canvas.y) },
       { label: 'Add Comment', action: () => addNodeAt('comment', canvas.x, canvas.y) },
+      { label: 'Add Question', action: () => addNodeAt('question', canvas.x, canvas.y) },
+      { label: 'Add Answer', action: () => addNodeAt('answer', canvas.x, canvas.y) },
       { sep: true },
       { label: 'Fit All', action: fitAll },
       { label: 'Select All', shortcut: 'Ctrl+A', action: selectAll },
@@ -2238,7 +2312,9 @@ $('#toolbar').addEventListener('click', (e) => {
     case 'add-decision':
     case 'add-startend':
     case 'add-io':
-    case 'add-comment': {
+    case 'add-comment':
+    case 'add-question':
+    case 'add-answer': {
       const type = action.replace('add-', '');
       dispatch('SET_MODE', { mode: 'place', placeType: type });
       updateToolbarActive();
@@ -2419,7 +2495,7 @@ function addNodeAt(type, cx, cy) {
   dispatch('ADD_NODE', {
     id, type,
     x: nx, y: ny, width: defs.width, height: defs.height,
-    text: type === 'startend' ? 'Start' : type === 'comment' ? 'Note' : type.charAt(0).toUpperCase() + type.slice(1),
+    text: type === 'startend' ? 'Start' : type === 'comment' ? 'Note' : type === 'question' ? 'Question?' : type === 'answer' ? 'Answer' : type.charAt(0).toUpperCase() + type.slice(1),
     color: defs.color, textColor: defs.textColor, fontSize: defs.fontSize
   });
   dispatch('SET_SELECTION', [id]);
@@ -3259,7 +3335,7 @@ renderConnections = function() {
       if (node && node.text) {
         clearTimeout(tooltipTimeout);
         tooltipTimeout = setTimeout(() => {
-          const types = { process: 'Process', decision: 'Decision', startend: 'Start/End', io: 'I/O', comment: 'Comment' };
+          const types = { process: 'Process', decision: 'Decision', startend: 'Start/End', io: 'I/O', comment: 'Comment', question: 'Question', answer: 'Answer' };
           tooltipEl.innerHTML = `<b>${types[node.type]}</b>: ${escHtml(node.text)}`;
           tooltipEl.style.left = (e.clientX + 12) + 'px';
           tooltipEl.style.top = (e.clientY + 12) + 'px';
