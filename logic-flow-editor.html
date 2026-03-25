@@ -333,6 +333,57 @@ html, body {
 .ctx-item.danger { color: var(--danger); }
 .ctx-item.danger:hover { background: var(--danger); color: #fff; }
 
+/* ── Quick-Create Popup (drag-to-create) ── */
+#quick-create {
+  position: fixed;
+  display: none;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 160px;
+  z-index: 1000;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+#quick-create.visible { display: block; }
+#quick-create .qc-header {
+  padding: 4px 12px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.qc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  border-left: 3px solid transparent;
+}
+.qc-item:hover { background: var(--bg4); }
+.qc-item.suggested {
+  background: var(--bg3);
+  border-left-color: var(--accent);
+  color: var(--text-bright);
+}
+.qc-item .qc-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.qc-item .qc-hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.qc-item.suggested .qc-hint { color: var(--accent); }
+
 /* ── Modal ── */
 .modal-overlay {
   position: fixed;
@@ -668,6 +719,7 @@ html, body {
 
 <!-- Context Menu -->
 <div id="context-menu"></div>
+<div id="quick-create"></div>
 
 <!-- JSON Import Modal -->
 <div id="json-modal" class="modal-overlay hidden">
@@ -2050,6 +2102,9 @@ function onPointerUp(e) {
         color: '#569cd6',
         lineStyle: 'solid'
       });
+    } else {
+      // Dropped in empty space — show quick-create popup
+      showQuickCreate(e.clientX, e.clientY, canvas, connectDragState);
     }
     connectDragState = null;
     layerDragPreview.innerHTML = '';
@@ -2295,7 +2350,111 @@ function closeContextMenu() {
 
 document.addEventListener('pointerdown', (e) => {
   if (!ctxMenu.contains(e.target)) closeContextMenu();
+  if (!qcMenu.contains(e.target)) closeQuickCreate();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// QUICK-CREATE POPUP (drag wire to empty space → create node)
+// ═══════════════════════════════════════════════════════════════
+
+const qcMenu = $('#quick-create');
+
+// Map source node type → suggested type to create (top of list)
+const QUICK_CREATE_SUGGESTIONS = {
+  question: 'answer',
+  answer:   'question',
+  startend: 'process',
+  process:  'process',
+  decision: 'process',
+  io:       'process',
+  comment:  'process',
+};
+
+const QUICK_CREATE_TYPES = [
+  { type: 'process',  label: 'Process',   color: '#264f78' },
+  { type: 'decision', label: 'Decision',  color: '#6a4c93' },
+  { type: 'startend', label: 'Start/End', color: '#2d7d46' },
+  { type: 'io',       label: 'I/O',       color: '#8a5d3b' },
+  { type: 'comment',  label: 'Comment',   color: '#4a4a2a' },
+  { type: 'question', label: 'Question',  color: '#0e7c7b' },
+  { type: 'answer',   label: 'Answer',    color: '#b85c1f' },
+];
+
+function showQuickCreate(screenX, screenY, canvasPos, dragInfo) {
+  const fromNode = store.nodes[dragInfo.fromNodeId];
+  const fromType = fromNode ? fromNode.type : 'process';
+  const suggested = QUICK_CREATE_SUGGESTIONS[fromType] || 'process';
+
+  qcMenu.innerHTML = '<div class="qc-header">Create &amp; connect</div>';
+
+  // Build sorted list: suggested type first, then the rest
+  const sorted = [...QUICK_CREATE_TYPES].sort((a, b) => {
+    if (a.type === suggested) return -1;
+    if (b.type === suggested) return 1;
+    return 0;
+  });
+
+  for (const item of sorted) {
+    const el = document.createElement('div');
+    el.className = 'qc-item' + (item.type === suggested ? ' suggested' : '');
+    el.innerHTML = `<span class="qc-swatch" style="background:${item.color}"></span><span>${item.label}</span>${item.type === suggested ? '<span class="qc-hint">suggested</span>' : ''}`;
+    el.addEventListener('click', () => {
+      closeQuickCreate();
+      quickCreateNode(item.type, canvasPos, dragInfo);
+    });
+    qcMenu.appendChild(el);
+  }
+
+  // Position at cursor
+  qcMenu.style.left = screenX + 'px';
+  qcMenu.style.top = screenY + 'px';
+  qcMenu.classList.add('visible');
+
+  // Clamp to viewport
+  requestAnimationFrame(() => {
+    const r = qcMenu.getBoundingClientRect();
+    if (r.right > window.innerWidth) qcMenu.style.left = (screenX - r.width) + 'px';
+    if (r.bottom > window.innerHeight) qcMenu.style.top = (screenY - r.height) + 'px';
+  });
+}
+
+function closeQuickCreate() {
+  qcMenu.classList.remove('visible');
+}
+
+function quickCreateNode(type, canvasPos, dragInfo) {
+  const defs = NODE_DEFAULTS[type];
+  let nx = canvasPos.x - defs.width / 2;
+  let ny = canvasPos.y - defs.height / 2;
+  if (store.gridSnap) { nx = snapTo(nx, store.gridSize); ny = snapTo(ny, store.gridSize); }
+
+  const nodeId = uid();
+  const defaultText = type === 'startend' ? 'Start' : type === 'comment' ? 'Note' : type === 'question' ? 'Question?' : type === 'answer' ? 'Answer' : type.charAt(0).toUpperCase() + type.slice(1);
+
+  dispatch('ADD_NODE', {
+    id: nodeId, type,
+    x: nx, y: ny, width: defs.width, height: defs.height,
+    text: defaultText,
+    color: defs.color, textColor: defs.textColor, fontSize: defs.fontSize
+  });
+
+  // Figure out best port on the new node (opposite side from where the wire came)
+  const newNode = store.nodes[nodeId];
+  const toPort = nearestPort(newNode, canvasPos.x, canvasPos.y);
+
+  dispatch('ADD_CONNECTION', {
+    id: cuid(),
+    from: dragInfo.fromNodeId,
+    fromPort: dragInfo.fromPort,
+    to: nodeId,
+    toPort: toPort,
+    label: '',
+    color: '#569cd6',
+    lineStyle: 'solid'
+  });
+
+  dispatch('SET_SELECTION', [nodeId]);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // TOOLBAR ACTIONS
@@ -2390,6 +2549,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeInlineEditor();
     closeContextMenu();
+    closeQuickCreate();
     if (store.mode !== 'select') {
       dispatch('SET_MODE', { mode: 'select' });
       updateToolbarActive();
